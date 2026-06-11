@@ -362,15 +362,26 @@
                     .reduce((sum, t) => sum + (t.totalHours || 0), 0);
                 document.getElementById('totalHoursToday').textContent = totalHoursToday.toFixed(1) + 'h';
 
-                const teamHtml = appData.timesheets?.slice(0, 5).map(t => `
-                    <div class="employee-item">
-                        <span style="font-weight:500;">${t.userId.name}</span>
-                        <span style="background:#fff3cd;color:#856404;padding:4px 8px;border-radius:4px;font-size:12px;">În așteptare</span>
-                        <span>${t.totalHours || 0}h</span>
-                        <span style="color:#666;font-size:12px;">${new Date(t.date).toLocaleDateString('ro-RO')}</span>
-                        <span></span>
+                // Today's check-in/out activity
+                const today = new Date().toISOString().slice(0,10);
+                const todayTs = allTimesheets.filter(t => new Date(t.date).toISOString().slice(0,10) === today);
+                const teamHtml = todayTs.length > 0 ? `
+                    <div style="display:grid;grid-template-columns:160px 80px 80px 60px 100px;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:#999;border-bottom:1px solid #eee;margin-bottom:4px;">
+                        <span>Angajat</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span>
                     </div>
-                `).join('') || '<p style="color:#999;">Nicio aprobare în așteptare.</p>';
+                    ${todayTs.map(t => {
+                        const cin = t.checkIn ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+                        const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+                        const sc = t.checkOut ? '#d4edda;color:#155724' : '#fff3cd;color:#856404';
+                        const sl = t.checkOut ? 'Terminat' : 'În lucru';
+                        return `<div style="display:grid;grid-template-columns:160px 80px 80px 60px 100px;gap:8px;align-items:center;padding:9px 10px;background:#f9f9f9;border-radius:6px;margin-bottom:4px;font-size:13px;">
+                            <span style="font-weight:500;">${t.userId?.name||'N/A'}</span>
+                            <span style="color:#27ae60;font-weight:600;">${cin}</span>
+                            <span style="color:#e74c3c;font-weight:600;">${cout}</span>
+                            <span style="font-weight:600;">${t.totalHours||0}h</span>
+                            <span style="background:${sc};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;">${sl}</span>
+                        </div>`;
+                    }).join('')}` : '<p style="color:#999;">Nicio activitate azi.</p>';
                 document.getElementById('teamStatus').innerHTML = teamHtml;
 
                 renderRecentTimesheets(allTimesheets);

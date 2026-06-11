@@ -157,6 +157,7 @@
                 <button class="tab" onclick="switchTab(event, 'breaks')"><i class="ti ti-coffee"></i> Pauze</button>
                 <button class="tab" onclick="switchTab(event, 'calendar')"><i class="ti ti-calendar"></i> Istoric</button>
                 <button class="tab" onclick="switchTab(event, 'approvals')"><i class="ti ti-checkbox"></i> Aprobari</button>
+                <button class="tab" onclick="switchTab(event, 'month')"><i class="ti ti-calendar-month"></i> Luna Curentă</button>
             </div>
 
             <!-- TAB: TODAY -->
@@ -244,6 +245,15 @@
                     <div id="approvalsStatus">
                         <p style="color: #999;">Loading...</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- TAB: LUNA CURENTA -->
+            <div id="month" class="tab-content">
+                <div class="card">
+                    <h2 id="monthTitle">Pontaj Luna Curentă</h2>
+                    <div id="monthSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"></div>
+                    <div id="monthList"><p style="color:#999;">Se încarcă...</p></div>
                 </div>
             </div>
         </div>
@@ -373,6 +383,7 @@
 
             if (tabName === 'calendar') loadHistory();
             if (tabName === 'approvals') loadApprovalsStatus();
+            if (tabName === 'month') loadMonthTimesheets();
         }
 
         // Load today's data
@@ -662,6 +673,66 @@
 
         // Patch showApp to start notifications
         const _origCheckLogin = checkLogin;
+        async function loadMonthTimesheets() {
+            const now = new Date();
+            const monthName = now.toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' });
+            document.getElementById('monthTitle').textContent = `Pontaj — ${monthName}`;
+            document.getElementById('monthList').innerHTML = '<p style="color:#999;">Se încarcă...</p>';
+            try {
+                const res = await fetch(`${API_URL}/api/timesheet/history?limit=100`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const monthly = (data.timesheets || []).filter(t => {
+                    const d = new Date(t.date);
+                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+                const totalHours = monthly.reduce((s, t) => s + (t.totalHours || 0), 0);
+                const approved = monthly.filter(t => t.status === 'approved').length;
+                const pending = monthly.filter(t => t.status === 'pending').length;
+
+                document.getElementById('monthSummary').innerHTML = `
+                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
+                        <div style="font-size:11px;color:#666;">Zile lucrate</div>
+                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${monthly.length}</div>
+                    </div>
+                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
+                        <div style="font-size:11px;color:#666;">Total ore</div>
+                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${totalHours.toFixed(1)}h</div>
+                    </div>
+                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
+                        <div style="font-size:11px;color:#666;">Aprobate / Așteptare</div>
+                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${approved} / ${pending}</div>
+                    </div>`;
+
+                if (monthly.length === 0) {
+                    document.getElementById('monthList').innerHTML = '<p style="color:#999;">Nicio zi înregistrată în luna curentă.</p>';
+                    return;
+                }
+
+                document.getElementById('monthList').innerHTML = `
+                    <div style="display:grid;grid-template-columns:120px 70px 80px 50px 90px;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:#999;border-bottom:1px solid #eee;margin-bottom:4px;">
+                        <span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span>
+                    </div>
+                    ${monthly.map(t => {
+                        const cin = t.checkIn ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+                        const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
+                        const sc = t.status==='approved' ? '#d4edda;color:#155724' : t.status==='rejected' ? '#f8d7da;color:#721c24' : '#fff3cd;color:#856404';
+                        const sl = t.status==='approved' ? 'Aprobat' : t.status==='rejected' ? 'Respins' : 'Așteptare';
+                        return `<div style="display:grid;grid-template-columns:120px 70px 80px 50px 90px;gap:8px;align-items:center;padding:10px;background:#f9f9f9;border-radius:6px;margin-bottom:4px;font-size:13px;">
+                            <span style="font-weight:500;">${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
+                            <span>${cin}</span>
+                            <span>${cout}</span>
+                            <span style="font-weight:600;">${t.totalHours||0}h</span>
+                            <span style="background:${sc};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;">${sl}</span>
+                        </div>`;
+                    }).join('')}`;
+            } catch (err) {
+                document.getElementById('monthList').innerHTML = '<p style="color:#999;">Eroare la încărcare.</p>';
+            }
+        }
+
         const origShowApp = typeof showApp === 'function' ? showApp : null;
 
         // Initialize

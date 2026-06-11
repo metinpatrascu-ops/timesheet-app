@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manager Dashboard - Timesheet</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; }
+        .user-info { text-align: right; }
+        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .logout-btn:hover { background: #c0392b; }
+        
+        .admin-badge { background: #3498db; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid #ddd; margin-bottom: 20px; background: white; border-radius: 8px 8px 0 0; }
+        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 3px solid transparent; }
+        .tab.active { color: #3498db; border-bottom-color: #3498db; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; }
+        
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
+        .stat { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-label { font-size: 12px; color: #666; }
+        .stat-value { font-size: 28px; font-weight: bold; margin-top: 8px; }
+        
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        
+        .employee-item { display: grid; grid-template-columns: 200px 1fr 80px 100px 120px; gap: 12px; align-items: center; padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+        .employee-item button { padding: 6px 12px; font-size: 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
+        .employee-item button:hover { background: #f0f0f0; }
+        
+        .approval-item { padding: 15px; background: #f9f9f9; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #f39c12; }
+        .approval-item.approved { border-left-color: #27ae60; background: #f0fdf4; }
+        
+        .approval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+        .approval-name { font-weight: 500; }
+        .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-approved { background: #d4edda; color: #155724; }
+        
+        .approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+        .approval-actions button { padding: 8px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer; color: white; }
+        .btn-approve { background: #27ae60; }
+        .btn-approve:hover { background: #229954; }
+        .btn-reject { background: #e74c3c; }
+        .btn-reject:hover { background: #c0392b; }
+        
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body>
+    <div id="loginPage" class="login-container" style="max-width: 400px; margin: 50px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+        <h1 style="font-size: 24px; margin-bottom: 20px; text-align: center;">Manager Dashboard</h1>
+        <div id="loginAlert"></div>
+        <form onsubmit="loginManager(event)">
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Email:</label>
+                <input type="email" id="loginEmail" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" required>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <label style="display: block; margin-bottom: 5px; font-weight: 500;">Password:</label>
+                <input type="password" id="loginPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" required>
+            </div>
+            <button type="submit" style="width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Login</button>
+        </form>
+    </div>
+
+    <div id="appPage" class="hidden">
+        <div class="container">
+            <div class="header">
+                <h1>Manager Dashboard</h1>
+                <div class="user-info">
+                    <span class="admin-badge">👔 Admin</span>
+                    <div style="margin-top: 8px;">Welcome, <strong id="userName">Manager</strong></div>
+                    <button class="logout-btn" onclick="logoutManager()">Logout</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab(event, 'overview')"><i class="ti ti-layout-grid"></i> Overview</button>
+                <button class="tab" onclick="switchTab(event, 'approvals')"><i class="ti ti-checkbox"></i> Aprobari</button>
+                <button class="tab" onclick="switchTab(event, 'employees')"><i class="ti ti-users"></i> Angajati</button>
+                <button class="tab" onclick="switchTab(event, 'reports')"><i class="ti ti-chart-bar"></i> Rapoarte</button>
+            </div>
+
+            <!-- OVERVIEW TAB -->
+            <div id="overview" class="tab-content active">
+                <div class="stats-grid">
+                    <div class="stat">
+                        <div class="stat-label">Total Angajati</div>
+                        <div class="stat-value" id="totalEmployees">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">In Lucru</div>
+                        <div class="stat-value" id="workingNow">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Aprobari Astazi</div>
+                        <div class="stat-value" id="approvalsToday">0</div>
+                    </div>
+                    <div class="stat">
+                        <div class="stat-label">Total Ore Astazi</div>
+                        <div class="stat-value" id="totalHoursToday">0h</div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Starea Echipei Azi</h2>
+                    <div id="teamStatus">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- APPROVALS TAB -->
+            <div id="approvals" class="tab-content">
+                <div class="alert alert-info">
+                    <i class="ti ti-info-circle"></i> Aproba sau respinge zilele de munca ale angajatilor
+                </div>
+
+                <div class="card">
+                    <h2>Zile in Asteptare de Aprobari</h2>
+                    <div id="approvalsList">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- EMPLOYEES TAB -->
+            <div id="employees" class="tab-content">
+                <div class="card">
+                    <h2>Gestionare Angajati</h2>
+                    <div id="employeesList">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- REPORTS TAB -->
+            <div id="reports" class="tab-content">
+                <div class="card">
+                    <h2>Raport Saptamana Curenta</h2>
+                    <div id="reportContent">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let currentUser = null;
+        let token = null;
+
+        // Check login
+        function checkLogin() {
+            const savedToken = localStorage.getItem('managerToken');
+            if (savedToken) {
+                token = savedToken;
+                fetchCurrentUser();
+            }
+        }
+
+        // Fetch current user
+        async function fetchCurrentUser() {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.user.role === 'manager' || data.user.role === 'admin') {
+                        currentUser = data.user;
+                        showApp();
+                    } else {
+                        logoutManager();
+                    }
+                } else {
+                    logoutManager();
+                }
+            } catch (err) {
+                console.error(err);
+                logoutManager();
+            }
+        }
+
+        // Login
+        async function loginManager(event) {
+            event.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && (data.user.role === 'manager' || data.user.role === 'admin')) {
+                    token = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('managerToken', token);
+                    showApp();
+                } else {
+                    document.getElementById('loginAlert').innerHTML = `<div class="alert alert-info">Only managers can access this</div>`;
+                }
+            } catch (err) {
+                document.getElementById('loginAlert').innerHTML = `<div class="alert alert-info">${err.message}</div>`;
+            }
+        }
+
+        // Logout
+        function logoutManager() {
+            token = null;
+            currentUser = null;
+            localStorage.removeItem('managerToken');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('appPage').classList.add('hidden');
+        }
+
+        // Show app
+        function showApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('appPage').classList.remove('hidden');
+            document.getElementById('userName').textContent = currentUser.name;
+            loadOverview();
+        }
+
+        // Switch tabs
+        function switchTab(event, tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.closest('.tab').classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'approvals') loadApprovals();
+            if (tabName === 'employees') loadEmployees();
+            if (tabName === 'reports') loadReports();
+        }
+
+        // Load overview
+        async function loadOverview() {
+            try {
+                // Get pending approvals
+                const appResponse = await fetch(`${API_URL}/api/manager/pending-approvals`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const appData = await appResponse.json();
+
+                // Get employees
+                const empResponse = await fetch(`${API_URL}/api/admin/employees`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const empData = empResponse.json();
+
+                document.getElementById('totalEmployees').textContent = appData.timesheets ? appData.timesheets.length : 0;
+                document.getElementById('approvalsToday').textContent = appData.timesheets?.filter(t => !t.checkOut).length || 0;
+
+                // Build team status
+                const teamHtml = appData.timesheets?.slice(0, 5).map(t => `
+                    <div class="employee-item">
+                        <span style="font-weight: 500;">${t.userId.name}</span>
+                        <div style="display: flex; gap: 8px;">
+                            <span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                                ${t.checkOut ? 'Completa' : 'In lucru'}
+                            </span>
+                        </div>
+                        <span>${t.totalHours || 0}h</span>
+                        <span style="color: #666; font-size: 12px;">${new Date(t.date).toLocaleDateString()}</span>
+                        <button onclick="viewEmployee('${t.userId._id}')">View</button>
+                    </div>
+                `).join('') || '<p style="color: #999;">No data</p>';
+
+                document.getElementById('teamStatus').innerHTML = teamHtml;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Load approvals
+        async function loadApprovals() {
+            try {
+                const response = await fetch(`${API_URL}/api/manager/pending-approvals`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                const html = data.timesheets?.map(t => `
+                    <div class="approval-item">
+                        <div class="approval-header">
+                            <span class="approval-name">${t.userId.name} - ${new Date(t.date).toLocaleDateString()}</span>
+                            <span class="status-badge status-${t.status}">${t.status}</span>
+                        </div>
+                        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                            <strong>Ore:</strong> ${t.totalHours || 0}h | <strong>Status:</strong> ${t.checkOut ? 'Check in/out complet' : 'In progres'}
+                        </div>
+                        <div class="approval-actions">
+                            <button class="btn-approve" onclick="approveDay('${t._id}')"><i class="ti ti-circle-check"></i> Aproba</button>
+                            <button class="btn-reject" onclick="rejectDay('${t._id}')"><i class="ti ti-circle-x"></i> Respinge</button>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: #999;">No pending approvals</p>';
+
+                document.getElementById('approvalsList').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Approve day
+        async function approveDay(timesheetId) {
+            try {
+                const response = await fetch(`${API_URL}/api/manager/approve/${timesheetId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    alert('Day approved successfully');
+                    loadApprovals();
+                    loadOverview();
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // Reject day
+        async function rejectDay(timesheetId) {
+            const notes = prompt('Enter rejection reason:');
+            if (!notes) return;
+
+            try {
+                const response = await fetch(`${API_URL}/api/manager/reject/${timesheetId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ notes })
+                });
+
+                if (response.ok) {
+                    alert('Day rejected');
+                    loadApprovals();
+                    loadOverview();
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // Load employees
+        async function loadEmployees() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/employees`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                const html = data.employees?.map(e => `
+                    <div class="employee-item">
+                        <span style="font-weight: 500;">${e.name}</span>
+                        <span style="color: #666; font-size: 12px;">${e.email}</span>
+                        <span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 11px;">Active</span>
+                        <span></span>
+                        <div style="display: flex; gap: 4px;">
+                            <button onclick="editEmployee('${e._id}')">Edit</button>
+                            <button onclick="deleteEmployee('${e._id}')">Delete</button>
+                        </div>
+                    </div>
+                `).join('') || '<p style="color: #999;">No employees</p>';
+
+                document.getElementById('employeesList').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Load reports
+        async function loadReports() {
+            try {
+                const response = await fetch(`${API_URL}/api/manager/team-timesheets`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                let totalHours = 0;
+                let approved = 0;
+                data.timesheets?.forEach(t => {
+                    totalHours += t.totalHours || 0;
+                    if (t.status === 'approved') approved++;
+                });
+
+                const html = `
+                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 12px; color: #666;">Total Ore Lucrate</div>
+                            <div style="font-size: 28px; font-weight: bold; margin-top: 8px;">${totalHours.toFixed(1)}h</div>
+                        </div>
+                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 12px; color: #666;">Zile Aprobate</div>
+                            <div style="font-size: 28px; font-weight: bold; margin-top: 8px;">${approved}</div>
+                        </div>
+                    </div>
+                `;
+
+                document.getElementById('reportContent').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Initialize
+        checkLogin();
+    </script>
+</body>
+</html>

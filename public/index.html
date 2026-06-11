@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Timesheet - Employee App</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        
+        .container { max-width: 900px; margin: 0 auto; padding: 20px; }
+        
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header h1 { font-size: 24px; }
+        .user-info { text-align: right; }
+        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .logout-btn:hover { background: #c0392b; }
+        
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid #ddd; margin-bottom: 20px; background: white; border-radius: 8px 8px 0 0; }
+        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 3px solid transparent; }
+        .tab.active { color: #3498db; border-bottom-color: #3498db; }
+        .tab:hover { color: #333; }
+        
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        
+        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
+        
+        .shift-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
+        .shift-item { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
+        .shift-label { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
+        .shift-value { font-size: 24px; font-weight: bold; color: #333; }
+        
+        .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        button { padding: 12px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+        .btn-primary { background: #27ae60; color: white; }
+        .btn-primary:hover { background: #229954; }
+        .btn-secondary { background: #3498db; color: white; }
+        .btn-secondary:hover { background: #2980b9; }
+        .btn-danger { background: #e74c3c; color: white; }
+        .btn-danger:hover { background: #c0392b; }
+        
+        .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; }
+        .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        
+        .activity-log { max-height: 400px; overflow-y: auto; }
+        .activity-item { padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #3498db; }
+        .activity-time { font-size: 12px; color: #666; }
+        .activity-text { font-size: 14px; font-weight: 500; margin-top: 4px; }
+        
+        .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
+        .stat { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-label { font-size: 12px; color: #666; }
+        .stat-value { font-size: 28px; font-weight: bold; margin-top: 8px; }
+        
+        .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .status-active { background: #d4edda; color: #155724; }
+        .status-pending { background: #fff3cd; color: #856404; }
+        .status-approved { background: #d1ecf1; color: #0c5460; }
+        
+        .login-container { max-width: 400px; margin: 50px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .login-container h1 { font-size: 24px; margin-bottom: 20px; text-align: center; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.1); }
+        
+        .hidden { display: none !important; }
+        
+        .loading { text-align: center; color: #666; padding: 20px; }
+        .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div id="loginPage" class="login-container">
+        <h1>Timesheet Login</h1>
+        <div id="loginAlert"></div>
+        <form onsubmit="login(event)">
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="loginEmail" required>
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="loginPassword" required>
+            </div>
+            <button type="submit" class="btn-primary" style="width: 100%;">Login</button>
+            <p style="text-align: center; margin-top: 15px; font-size: 14px;">
+                Nu ai cont? <a href="#" onclick="toggleRegister(event)" style="color: #3498db; text-decoration: none;">Inregistreaza-te</a>
+            </p>
+        </form>
+
+        <form id="registerForm" class="hidden" onsubmit="register(event)" style="margin-top: 20px;">
+            <h2 style="font-size: 18px; margin-bottom: 15px;">Inregistrare</h2>
+            <div id="registerAlert"></div>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="email" id="registerEmail" required>
+            </div>
+            <div class="form-group">
+                <label>Nume:</label>
+                <input type="text" id="registerName" required>
+            </div>
+            <div class="form-group">
+                <label>Password:</label>
+                <input type="password" id="registerPassword" required>
+            </div>
+            <button type="submit" class="btn-primary" style="width: 100%;">Inregistreaza-te</button>
+            <p style="text-align: center; margin-top: 15px; font-size: 14px;">
+                Ai deja cont? <a href="#" onclick="toggleRegister(event)" style="color: #3498db; text-decoration: none;">Login</a>
+            </p>
+        </form>
+    </div>
+
+    <div id="appPage" class="hidden">
+        <div class="container">
+            <div class="header">
+                <h1>Timesheet System</h1>
+                <div class="user-info">
+                    <div>Welcome, <strong id="userName">User</strong></div>
+                    <button class="logout-btn" onclick="logout()">Logout</button>
+                </div>
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab(event, 'today')"><i class="ti ti-clock"></i> Azi</button>
+                <button class="tab" onclick="switchTab(event, 'breaks')"><i class="ti ti-coffee"></i> Pauze</button>
+                <button class="tab" onclick="switchTab(event, 'calendar')"><i class="ti ti-calendar"></i> Istoric</button>
+                <button class="tab" onclick="switchTab(event, 'approvals')"><i class="ti ti-checkbox"></i> Aprobari</button>
+            </div>
+
+            <!-- TAB: TODAY -->
+            <div id="today" class="tab-content active">
+                <div id="todayAlert"></div>
+                
+                <div class="card">
+                    <h2>Program Astazi</h2>
+                    <div class="shift-grid">
+                        <div class="shift-item">
+                            <div class="shift-label">Check In</div>
+                            <div class="shift-value" id="checkInTime">--:--</div>
+                        </div>
+                        <div class="shift-item">
+                            <div class="shift-label">Check Out</div>
+                            <div class="shift-value" id="checkOutTime">--:--</div>
+                        </div>
+                        <div class="shift-item">
+                            <div class="shift-label">Ore Lucrate</div>
+                            <div class="shift-value" id="totalHours">0h</div>
+                        </div>
+                    </div>
+
+                    <div class="stats">
+                        <div class="stat">
+                            <div class="stat-label">Status</div>
+                            <div style="margin-top: 10px;">
+                                <span class="status-badge status-pending" id="statusBadge">Nu ai inceput</span>
+                            </div>
+                        </div>
+                        <div class="stat">
+                            <div class="stat-label">Ora Curenta</div>
+                            <div class="stat-value" id="currentTime">--:--</div>
+                        </div>
+                    </div>
+
+                    <div class="button-group" style="margin-top: 20px;">
+                        <button class="btn-primary" id="checkInBtn" onclick="checkIn()"><i class="ti ti-login"></i> Check In</button>
+                        <button class="btn-danger" id="checkOutBtn" onclick="checkOut()" class="hidden"><i class="ti ti-logout"></i> Check Out</button>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h2>Activitate Azi</h2>
+                    <div class="activity-log" id="activityLog">
+                        <p style="color: #999;">Niciun eveniment</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: BREAKS -->
+            <div id="breaks" class="tab-content">
+                <div class="card">
+                    <h2>Gestionare Pauze</h2>
+                    <p style="color: #666; margin-bottom: 15px;">Pauza zilei: 1 ora (12:00 - 13:00)</p>
+                    
+                    <div class="button-group">
+                        <button class="btn-primary" id="startBreakBtn" onclick="startBreak()"><i class="ti ti-coffee"></i> Incepe Pauza</button>
+                        <button class="btn-danger" id="endBreakBtn" onclick="endBreak()" class="hidden"><i class="ti ti-coffee"></i> Termina Pauza</button>
+                    </div>
+
+                    <div id="pauseList" style="margin-top: 15px;">
+                        <p style="color: #999;">Niciuna pauza inregistrata</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: CALENDAR -->
+            <div id="calendar" class="tab-content">
+                <div class="card">
+                    <h2>Istoric Timesheet</h2>
+                    <div id="historyList">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB: APPROVALS -->
+            <div id="approvals" class="tab-content">
+                <div class="card">
+                    <h2>Status Aprobari</h2>
+                    <div class="alert alert-info">
+                        <i class="ti ti-info-circle"></i> Zilele tale sunt sincronizate in timp real
+                    </div>
+                    <div id="approvalsStatus">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'http://localhost:3000';
+        let currentUser = null;
+        let token = null;
+
+        // Check if user is logged in
+        function checkLogin() {
+            const savedToken = localStorage.getItem('token');
+            if (savedToken) {
+                token = savedToken;
+                fetchCurrentUser();
+            }
+        }
+
+        // Fetch current user info
+        async function fetchCurrentUser() {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (response.ok) {
+                    const data = await response.json();
+                    currentUser = data.user;
+                    showApp();
+                } else {
+                    logout();
+                }
+            } catch (err) {
+                console.error(err);
+                logout();
+            }
+        }
+
+        // Login
+        async function login(event) {
+            event.preventDefault();
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('token', token);
+                    showApp();
+                } else {
+                    showAlert('loginAlert', data.error || 'Login failed', 'error');
+                }
+            } catch (err) {
+                showAlert('loginAlert', err.message, 'error');
+            }
+        }
+
+        // Register
+        async function register(event) {
+            event.preventDefault();
+            const email = document.getElementById('registerEmail').value;
+            const name = document.getElementById('registerName').value;
+            const password = document.getElementById('registerPassword').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, name, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.token;
+                    currentUser = data.user;
+                    localStorage.setItem('token', token);
+                    showApp();
+                } else {
+                    showAlert('registerAlert', data.error || 'Registration failed', 'error');
+                }
+            } catch (err) {
+                showAlert('registerAlert', err.message, 'error');
+            }
+        }
+
+        // Toggle register form
+        function toggleRegister(event) {
+            event.preventDefault();
+            document.getElementById('registerForm').classList.toggle('hidden');
+        }
+
+        // Logout
+        function logout() {
+            token = null;
+            currentUser = null;
+            localStorage.removeItem('token');
+            document.getElementById('loginPage').classList.remove('hidden');
+            document.getElementById('appPage').classList.add('hidden');
+        }
+
+        // Show app
+        function showApp() {
+            document.getElementById('loginPage').classList.add('hidden');
+            document.getElementById('appPage').classList.remove('hidden');
+            document.getElementById('userName').textContent = currentUser.name;
+            loadTodayData();
+            setInterval(updateCurrentTime, 1000);
+            updateCurrentTime();
+        }
+
+        // Switch tabs
+        function switchTab(event, tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            event.target.closest('.tab').classList.add('active');
+            document.getElementById(tabName).classList.add('active');
+
+            if (tabName === 'calendar') loadHistory();
+            if (tabName === 'approvals') loadApprovalsStatus();
+        }
+
+        // Load today's data
+        async function loadTodayData() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/today`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const timesheet = data.timesheet;
+
+                if (timesheet && timesheet.checkIn) {
+                    document.getElementById('checkInTime').textContent = new Date(timesheet.checkIn).toLocaleTimeString();
+                    document.getElementById('checkInBtn').classList.add('hidden');
+                    document.getElementById('checkOutBtn').classList.remove('hidden');
+
+                    if (timesheet.checkOut) {
+                        document.getElementById('checkOutTime').textContent = new Date(timesheet.checkOut).toLocaleTimeString();
+                        document.getElementById('totalHours').textContent = (timesheet.totalHours || 0) + 'h';
+                        document.getElementById('checkOutBtn').classList.add('hidden');
+                    }
+
+                    updateActivityLog(timesheet);
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Check In
+        async function checkIn() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/checkin`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    showAlert('todayAlert', 'Check in successful!', 'success');
+                    loadTodayData();
+                } else {
+                    showAlert('todayAlert', 'Check in failed', 'error');
+                }
+            } catch (err) {
+                showAlert('todayAlert', err.message, 'error');
+            }
+        }
+
+        // Check Out
+        async function checkOut() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/checkout`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    showAlert('todayAlert', 'Check out successful!', 'success');
+                    loadTodayData();
+                } else {
+                    showAlert('todayAlert', 'Check out failed', 'error');
+                }
+            } catch (err) {
+                showAlert('todayAlert', err.message, 'error');
+            }
+        }
+
+        // Start Break
+        async function startBreak() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/break/start`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    document.getElementById('startBreakBtn').classList.add('hidden');
+                    document.getElementById('endBreakBtn').classList.remove('hidden');
+                } else {
+                    alert('Break start failed');
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // End Break
+        async function endBreak() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/break/end`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    document.getElementById('startBreakBtn').classList.remove('hidden');
+                    document.getElementById('endBreakBtn').classList.add('hidden');
+                    loadTodayData();
+                } else {
+                    alert('Break end failed');
+                }
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
+        // Load history
+        async function loadHistory() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/history`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                const html = data.timesheets.map(ts => `
+                    <div class="activity-item">
+                        <div class="activity-time">${new Date(ts.date).toLocaleDateString()}</div>
+                        <div class="activity-text">${ts.totalHours || 0}h - Status: <strong>${ts.status}</strong></div>
+                    </div>
+                `).join('');
+
+                document.getElementById('historyList').innerHTML = html || '<p style="color: #999;">No records</p>';
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Load approvals status
+        async function loadApprovalsStatus() {
+            try {
+                const response = await fetch(`${API_URL}/api/timesheet/history`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+
+                let approved = 0, pending = 0, rejected = 0;
+                data.timesheets.forEach(ts => {
+                    if (ts.status === 'approved') approved++;
+                    if (ts.status === 'pending') pending++;
+                    if (ts.status === 'rejected') rejected++;
+                });
+
+                const html = `
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px;">
+                        <div style="background: #d4edda; padding: 15px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 12px; color: #666;">Aprobate</div>
+                            <div style="font-size: 28px; font-weight: bold; color: #155724; margin-top: 10px;">${approved}</div>
+                        </div>
+                        <div style="background: #fff3cd; padding: 15px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 12px; color: #666;">In Asteptare</div>
+                            <div style="font-size: 28px; font-weight: bold; color: #856404; margin-top: 10px;">${pending}</div>
+                        </div>
+                        <div style="background: #f8d7da; padding: 15px; border-radius: 6px; text-align: center;">
+                            <div style="font-size: 12px; color: #666;">Respinse</div>
+                            <div style="font-size: 28px; font-weight: bold; color: #721c24; margin-top: 10px;">${rejected}</div>
+                        </div>
+                    </div>
+                    ${data.timesheets.map(ts => `
+                        <div class="activity-item">
+                            <div class="activity-time">${new Date(ts.date).toLocaleDateString()}</div>
+                            <div class="activity-text">${ts.totalHours || 0}h - <span class="status-badge status-${ts.status}">${ts.status}</span></div>
+                        </div>
+                    `).join('')}
+                `;
+
+                document.getElementById('approvalsStatus').innerHTML = html;
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Update activity log
+        function updateActivityLog(timesheet) {
+            const activities = [];
+            if (timesheet.checkIn) {
+                activities.push({ time: new Date(timesheet.checkIn).toLocaleTimeString(), text: 'Check In' });
+            }
+            if (timesheet.breaks && timesheet.breaks.length > 0) {
+                timesheet.breaks.forEach(br => {
+                    activities.push({ time: new Date(br.start).toLocaleTimeString(), text: 'Break Start' });
+                    activities.push({ time: new Date(br.end).toLocaleTimeString(), text: 'Break End' });
+                });
+            }
+            if (timesheet.checkOut) {
+                activities.push({ time: new Date(timesheet.checkOut).toLocaleTimeString(), text: 'Check Out' });
+            }
+
+            const html = activities.map(a => `
+                <div class="activity-item">
+                    <div class="activity-time">${a.time}</div>
+                    <div class="activity-text"><i class="ti ti-circle-check"></i> ${a.text}</div>
+                </div>
+            `).join('');
+
+            document.getElementById('activityLog').innerHTML = html || '<p style="color: #999;">No activities</p>';
+        }
+
+        // Update current time
+        function updateCurrentTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString();
+        }
+
+        // Show alert
+        function showAlert(elementId, message, type) {
+            const alertDiv = document.getElementById(elementId);
+            alertDiv.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => { alertDiv.innerHTML = ''; }, 5000);
+        }
+
+        // Initialize
+        checkLogin();
+    </script>
+</body>
+</html>

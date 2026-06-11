@@ -1,0 +1,425 @@
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const bcrypt = require('bcrypt');
+const jwt = require('jsonwebtoken');
+const path = require('path');
+require('dotenv').config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+app.use(express.static('public'));
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/timesheet';
+mongoose.connect(MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+}).then(() => {
+  console.log('Connected to MongoDB');
+}).catch(err => {
+  console.error('MongoDB connection error:', err);
+});
+
+// Schemas
+const userSchema = new mongoose.Schema({
+  email: { type: String, unique: true, required: true },
+  password: { type: String, required: true },
+  name: String,
+  role: { type: String, enum: ['employee', 'manager', 'admin'], default: 'employee' },
+  createdAt: { type: Date, default: Date.now }
+});
+
+const timesheetSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  date: { type: Date, required: true },
+  checkIn: Date,
+  checkOut: Date,
+  totalHours: Number,
+  breaks: [{
+    start: Date,
+    end: Date,
+    duration: Number
+  }],
+  status: { type: String, enum: ['pending', 'approved', 'rejected'], default: 'pending' },
+  approvedBy: mongoose.Schema.Types.ObjectId,
+  approvedAt: Date,
+  notes: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
+const User = mongoose.model('User', userSchema);
+const Timesheet = mongoose.model('Timesheet', timesheetSchema);
+
+// Helper function to generate JWT
+const generateToken = (userId) => {
+  return jwt.sign({ userId }, process.env.JWT_SECRET || 'your-secret-key', { expiresIn: '7d' });
+};
+
+// Middleware to verify token
+const verifyToken = (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No token provided' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
+    req.userId = decoded.userId;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Invalid token' });
+  }
+};
+
+// Routes
+// Register
+app.post('/api/auth/register', async (req, res) => {
+  try {
+    const { email, password, name, role } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ error: 'Email already exists' });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const user = new User({
+      email,
+      password: hashedPassword,
+      name: name || email.split('@')[0],
+      role: role || 'employee'
+    });
+
+    await user.save();
+    const token = generateToken(user._id);
+
+    res.json({
+      message: 'User registered successfully',
+      token,
+      user: { id: user._id, email: user.email, name: user.name, role: user.role }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Login
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password required' });
+    }
+
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+
+    const token = generateToken(user._id);
+
+    res.json({
+      message: 'Login successful',
+      token,
+      user: { id: user._id, email: user.email, name: user.name, role: user.role }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get current user
+app.get('/api/auth/me', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    res.json({ user: { id: user._id, email: user.email, name: user.name, role: user.role } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check In
+app.post('/api/timesheet/checkin', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    let timesheet = await Timesheet.findOne({
+      userId: req.userId,
+      date: { $gte: today, $lt: new Date(today.getTime() + 24*60*60*1000) }
+    });
+
+    if (!timesheet) {
+      timesheet = new Timesheet({
+        userId: req.userId,
+        date: new Date(),
+        checkIn: new Date()
+      });
+    } else {
+      timesheet.checkIn = new Date();
+    }
+
+    await timesheet.save();
+    res.json({ message: 'Check in successful', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Check Out
+app.post('/api/timesheet/checkout', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const timesheet = await Timesheet.findOne({
+      userId: req.userId,
+      date: { $gte: today, $lt: new Date(today.getTime() + 24*60*60*1000) }
+    });
+
+    if (!timesheet || !timesheet.checkIn) {
+      return res.status(400).json({ error: 'No check in found' });
+    }
+
+    timesheet.checkOut = new Date();
+    
+    // Calculate total hours
+    let totalMs = timesheet.checkOut - timesheet.checkIn;
+    if (timesheet.breaks && timesheet.breaks.length > 0) {
+      timesheet.breaks.forEach(br => {
+        totalMs -= (br.end - br.start);
+      });
+    }
+    timesheet.totalHours = Math.round((totalMs / (1000 * 60 * 60)) * 2) / 2;
+
+    await timesheet.save();
+    res.json({ message: 'Check out successful', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Add break
+app.post('/api/timesheet/break/start', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const timesheet = await Timesheet.findOne({
+      userId: req.userId,
+      date: { $gte: today, $lt: new Date(today.getTime() + 24*60*60*1000) }
+    });
+
+    if (!timesheet) {
+      return res.status(400).json({ error: 'No timesheet for today' });
+    }
+
+    timesheet.currentBreakStart = new Date();
+    await timesheet.save();
+
+    res.json({ message: 'Break started', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// End break
+app.post('/api/timesheet/break/end', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const timesheet = await Timesheet.findOne({
+      userId: req.userId,
+      date: { $gte: today, $lt: new Date(today.getTime() + 24*60*60*1000) }
+    });
+
+    if (!timesheet || !timesheet.currentBreakStart) {
+      return res.status(400).json({ error: 'No break in progress' });
+    }
+
+    const breakEnd = new Date();
+    const duration = (breakEnd - timesheet.currentBreakStart) / (1000 * 60); // in minutes
+
+    if (!timesheet.breaks) timesheet.breaks = [];
+    timesheet.breaks.push({
+      start: timesheet.currentBreakStart,
+      end: breakEnd,
+      duration: Math.round(duration)
+    });
+
+    timesheet.currentBreakStart = null;
+    await timesheet.save();
+
+    res.json({ message: 'Break ended', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get today's timesheet
+app.get('/api/timesheet/today', verifyToken, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const timesheet = await Timesheet.findOne({
+      userId: req.userId,
+      date: { $gte: today, $lt: new Date(today.getTime() + 24*60*60*1000) }
+    });
+
+    res.json({ timesheet: timesheet || null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all timesheets for a user (with pagination)
+app.get('/api/timesheet/history', verifyToken, async (req, res) => {
+  try {
+    const { page = 1, limit = 30 } = req.query;
+    const skip = (page - 1) * limit;
+
+    const timesheets = await Timesheet.find({ userId: req.userId })
+      .sort({ date: -1 })
+      .skip(skip)
+      .limit(parseInt(limit));
+
+    const total = await Timesheet.countDocuments({ userId: req.userId });
+
+    res.json({
+      timesheets,
+      pagination: { page: parseInt(page), limit: parseInt(limit), total }
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Get all timesheets pending approval
+app.get('/api/manager/pending-approvals', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const timesheets = await Timesheet.find({ status: 'pending' })
+      .populate('userId', 'name email')
+      .sort({ date: -1 });
+
+    res.json({ timesheets });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Approve timesheet
+app.post('/api/manager/approve/:timesheetId', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const timesheet = await Timesheet.findByIdAndUpdate(
+      req.params.timesheetId,
+      {
+        status: 'approved',
+        approvedBy: req.userId,
+        approvedAt: new Date()
+      },
+      { new: true }
+    );
+
+    res.json({ message: 'Timesheet approved', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Reject timesheet
+app.post('/api/manager/reject/:timesheetId', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const timesheet = await Timesheet.findByIdAndUpdate(
+      req.params.timesheetId,
+      {
+        status: 'rejected',
+        notes: req.body.notes || ''
+      },
+      { new: true }
+    );
+
+    res.json({ message: 'Timesheet rejected', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Get team timesheets
+app.get('/api/manager/team-timesheets', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const { date, status } = req.query;
+    const query = {};
+
+    if (date) {
+      const startDate = new Date(date);
+      startDate.setHours(0, 0, 0, 0);
+      const endDate = new Date(startDate);
+      endDate.setHours(23, 59, 59, 999);
+      query.date = { $gte: startDate, $lte: endDate };
+    }
+
+    if (status) query.status = status;
+
+    const timesheets = await Timesheet.find(query)
+      .populate('userId', 'name email')
+      .sort({ date: -1 });
+
+    res.json({ timesheets });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get all employees (admin only)
+app.get('/api/admin/employees', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'admin' && user.role !== 'manager') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    const employees = await User.find({ role: 'employee' }).select('-password');
+    res.json({ employees });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});

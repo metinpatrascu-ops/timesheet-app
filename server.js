@@ -16,6 +16,25 @@ const transporter = nodemailer.createTransport({
   }
 });
 
+async function sendNotifEmail(to, name, subject, bodyHtml) {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return;
+  const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+  try {
+    await transporter.sendMail({
+      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+        <h2 style="color:#3498db;">Salut, ${name}!</h2>
+        ${bodyHtml}
+        <a href="${appUrl}" style="background:#3498db;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px;">Vezi în aplicație</a>
+      </div>`
+    });
+  } catch (err) {
+    console.error('Email error:', err.message);
+  }
+}
+
 async function sendWelcomeEmail(to, name, password) {
   if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return;
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
@@ -382,13 +401,20 @@ app.post('/api/manager/approve/:timesheetId', verifyToken, async (req, res) => {
 
     const timesheet = await Timesheet.findByIdAndUpdate(
       req.params.timesheetId,
-      {
-        status: 'approved',
-        approvedBy: req.userId,
-        approvedAt: new Date()
-      },
+      { status: 'approved', approvedBy: req.userId, approvedAt: new Date() },
       { new: true }
     );
+
+    const employee = await User.findById(timesheet.userId);
+    if (employee) {
+      const dateStr = new Date(timesheet.date).toLocaleDateString('ro-RO');
+      const msg = `Ziua ta de muncă din ${dateStr} a fost aprobată de manager.`;
+      await Notification.create({ userId: employee._id, message: msg });
+      sendNotifEmail(employee.email, employee.name, `Zi aprobată — ${dateStr}`,
+        `<p>Ziua ta de muncă din <strong>${dateStr}</strong> a fost <span style="color:#27ae60;font-weight:bold;">aprobată</span>.</p>
+         <p>Ore lucrate: <strong>${timesheet.totalHours || 0}h</strong></p>`
+      );
+    }
 
     res.json({ message: 'Timesheet approved', timesheet });
   } catch (err) {
@@ -406,12 +432,21 @@ app.post('/api/manager/reject/:timesheetId', verifyToken, async (req, res) => {
 
     const timesheet = await Timesheet.findByIdAndUpdate(
       req.params.timesheetId,
-      {
-        status: 'rejected',
-        notes: req.body.notes || ''
-      },
+      { status: 'rejected', notes: req.body.notes || '' },
       { new: true }
     );
+
+    const employee = await User.findById(timesheet.userId);
+    if (employee) {
+      const dateStr = new Date(timesheet.date).toLocaleDateString('ro-RO');
+      const motiv = req.body.notes ? `Motiv: ${req.body.notes}` : '';
+      const msg = `Ziua ta de muncă din ${dateStr} a fost respinsă. ${motiv}`;
+      await Notification.create({ userId: employee._id, message: msg });
+      sendNotifEmail(employee.email, employee.name, `Zi respinsă — ${dateStr}`,
+        `<p>Ziua ta de muncă din <strong>${dateStr}</strong> a fost <span style="color:#e74c3c;font-weight:bold;">respinsă</span>.</p>
+         ${req.body.notes ? `<p>Motiv: <em>${req.body.notes}</em></p>` : ''}`
+      );
+    }
 
     res.json({ message: 'Timesheet rejected', timesheet });
   } catch (err) {

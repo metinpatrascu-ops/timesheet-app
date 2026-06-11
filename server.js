@@ -517,8 +517,8 @@ app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ email, password: hashedPassword, name, role: 'employee' });
     await newUser.save();
-    await sendWelcomeEmail(email, name, password);
     res.json({ message: 'Employee created', user: { id: newUser._id, email: newUser.email, name: newUser.name } });
+    sendWelcomeEmail(email, name, password);
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -575,42 +575,24 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
     const employee = await User.findById(employeeId);
     const msgText = `Managerul a adăugat/actualizat ziua de ${date}. Ore lucrate: ${totalHours}h. Status: Aprobat.`;
 
-    await Notification.create({ userId: employeeId, message: msgText });
-
-    // Send email to employee
-    if (employee) {
-      const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
-      if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
-        try {
-          await transporter.sendMail({
-            from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
-            to: employee.email,
-            subject: `Program actualizat - ${date}`,
-            html: `
-              <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-                <h2 style="color:#3498db;">Salut, ${employee.name}!</h2>
-                <p>Managerul tău a actualizat programul tău de lucru.</p>
-                <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
-                  <p><strong>Data:</strong> ${date}</p>
-                  <p><strong>Check In:</strong> ${checkIn}</p>
-                  <p><strong>Check Out:</strong> ${checkOut}</p>
-                  <p><strong>Total ore:</strong> ${totalHours}h</p>
-                  <p><strong>Status:</strong> ✅ Aprobat</p>
-                  ${notes ? `<p><strong>Note:</strong> ${notes}</p>` : ''}
-                </div>
-                <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">
-                  Vezi în aplicație
-                </a>
-              </div>
-            `
-          });
-        } catch (emailErr) {
-          console.error('Email error:', emailErr.message);
-        }
-      }
-    }
+    Notification.create({ userId: employeeId, message: msgText }).catch(() => {});
 
     res.json({ message: 'Timesheet added', timesheet });
+
+    // Send email in background (non-blocking)
+    if (employee) {
+      sendNotifEmail(employee.email, employee.name, `Program actualizat — ${date}`,
+        `<p>Managerul tău a actualizat programul tău de lucru.</p>
+         <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:16px 0;">
+           <p><strong>Data:</strong> ${date}</p>
+           <p><strong>Check In:</strong> ${checkIn}</p>
+           <p><strong>Check Out:</strong> ${checkOut}</p>
+           <p><strong>Total ore:</strong> ${totalHours}h</p>
+           <p><strong>Status:</strong> ✅ Aprobat</p>
+           ${notes ? `<p><strong>Note:</strong> ${notes}</p>` : ''}
+         </div>`
+      );
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

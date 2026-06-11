@@ -617,6 +617,55 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
   }
 });
 
+// Manager: Delete a timesheet entry
+app.delete('/api/manager/timesheet/:id', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+    const ts = await Timesheet.findByIdAndDelete(req.params.id);
+    if (!ts) return res.status(404).json({ error: 'Not found' });
+    const employee = await User.findById(ts.userId);
+    if (employee) {
+      const dateStr = new Date(ts.date).toLocaleDateString('ro-RO');
+      Notification.create({ userId: employee._id, message: `Ziua de muncă din ${dateStr} a fost ștearsă de manager.` }).catch(() => {});
+      sendNotifEmail(employee.email, employee.name, `Zi ștearsă — ${dateStr}`,
+        `<p>Managerul a șters ziua ta de muncă din <strong>${dateStr}</strong>.</p>`);
+    }
+    res.json({ message: 'Deleted' });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Manager: Update a timesheet entry
+app.put('/api/manager/timesheet/:id', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+    const { date, checkIn, checkOut, notes } = req.body;
+    const checkInDate = new Date(`${date}T${checkIn}:00`);
+    const checkOutDate = new Date(`${date}T${checkOut}:00`);
+    const totalHours = Math.round(((checkOutDate - checkInDate) / (1000 * 60 * 60)) * 2) / 2;
+    const ts = await Timesheet.findByIdAndUpdate(req.params.id,
+      { checkIn: checkInDate, checkOut: checkOutDate, totalHours, notes: notes || '', status: 'approved', approvedBy: req.userId, approvedAt: new Date() },
+      { new: true }
+    );
+    if (!ts) return res.status(404).json({ error: 'Not found' });
+    const employee = await User.findById(ts.userId);
+    if (employee) {
+      const msgText = `Managerul a modificat ziua de ${date}. Ore lucrate: ${totalHours}h.`;
+      Notification.create({ userId: employee._id, message: msgText }).catch(() => {});
+      sendNotifEmail(employee.email, employee.name, `Program modificat — ${date}`,
+        `<p>Managerul a modificat ziua ta de muncă din <strong>${date}</strong>.</p>
+         <div style="background:#f9f9f9;padding:12px;border-radius:6px;margin:12px 0;">
+           <p><strong>Check In:</strong> ${checkIn}</p>
+           <p><strong>Check Out:</strong> ${checkOut}</p>
+           <p><strong>Total ore:</strong> ${totalHours}h</p>
+           ${notes ? `<p><strong>Note:</strong> ${notes}</p>` : ''}
+         </div>`);
+    }
+    res.json({ message: 'Updated', timesheet: ts });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // Mark notification as read
 app.post('/api/notifications/:id/read', verifyToken, async (req, res) => {
   try {

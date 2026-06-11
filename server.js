@@ -535,8 +535,9 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
       date: { $gte: dateObj, $lt: new Date(dateObj.getTime() + 24*60*60*1000) }
     });
 
-    const checkInDate = new Date(`${date}T${checkIn}:00`);
-    const checkOutDate = new Date(`${date}T${checkOut}:00`);
+    const roOffset = (() => { const d = new Date(date+'T12:00:00Z'); const l = new Date(d.toLocaleString('en-US',{timeZone:'Europe/Bucharest'})); const h = Math.round((l-d)/3600000); return (h>=0?'+':'-')+String(Math.abs(h)).padStart(2,'0')+':00'; })();
+    const checkInDate = new Date(`${date}T${checkIn}:00${roOffset}`);
+    const checkOutDate = new Date(`${date}T${checkOut}:00${roOffset}`);
     const totalMs = checkOutDate - checkInDate;
     const totalHours = Math.round((totalMs / (1000 * 60 * 60)) * 2) / 2;
 
@@ -641,8 +642,9 @@ app.put('/api/manager/timesheet/:id', verifyToken, async (req, res) => {
     const user = await User.findById(req.userId);
     if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
     const { date, checkIn, checkOut, notes } = req.body;
-    const checkInDate = new Date(`${date}T${checkIn}:00`);
-    const checkOutDate = new Date(`${date}T${checkOut}:00`);
+    const roOffset2 = (() => { const d = new Date(date+'T12:00:00Z'); const l = new Date(d.toLocaleString('en-US',{timeZone:'Europe/Bucharest'})); const h = Math.round((l-d)/3600000); return (h>=0?'+':'-')+String(Math.abs(h)).padStart(2,'0')+':00'; })();
+    const checkInDate = new Date(`${date}T${checkIn}:00${roOffset2}`);
+    const checkOutDate = new Date(`${date}T${checkOut}:00${roOffset2}`);
     const totalHours = Math.round(((checkOutDate - checkInDate) / (1000 * 60 * 60)) * 2) / 2;
     const ts = await Timesheet.findByIdAndUpdate(req.params.id,
       { checkIn: checkInDate, checkOut: checkOutDate, totalHours, notes: notes || '', status: 'approved', approvedBy: req.userId, approvedAt: new Date() },

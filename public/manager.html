@@ -6,58 +6,58 @@
     <title>Manager Dashboard - Timesheet</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
     <style>
+        :root {
+            --bg: #f5f5f5; --card: #ffffff; --text: #333333; --text2: #666666;
+            --border: #dddddd; --item: #f9f9f9; --header: #ffffff;
+            --input-bg: #ffffff; --input-border: #dddddd; --emp-btn-bg: #ffffff;
+        }
+        [data-theme="dark"] {
+            --bg: #0f1117; --card: #1e1e2e; --text: #e0e0e0; --text2: #aaaaaa;
+            --border: #333344; --item: #252535; --header: #1a1a2a;
+            --input-bg: #252535; --input-border: #444455; --emp-btn-bg: #2e2e3e;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
-        
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        
-        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header { background: var(--header); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .header h1 { font-size: 24px; }
-        .user-info { text-align: right; }
-        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .user-info { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .logout-btn:hover { background: #c0392b; }
-        
+        .dark-toggle { padding: 8px 12px; background: var(--item); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 16px; }
         .admin-badge { background: #3498db; color: white; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-        
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid #ddd; margin-bottom: 20px; background: white; border-radius: 8px 8px 0 0; }
-        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 3px solid transparent; }
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; background: var(--card); border-radius: 8px 8px 0 0; }
+        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text2); border-bottom: 3px solid transparent; }
         .tab.active { color: #3498db; border-bottom-color: #3498db; }
-        
+        .tab:hover { color: var(--text); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        
-        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 18px; margin-bottom: 15px; }
-        
+        .card { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: var(--text); }
         .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-bottom: 20px; }
-        .stat { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
-        .stat-label { font-size: 12px; color: #666; }
+        .stat { background: var(--item); padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-label { font-size: 12px; color: var(--text2); }
         .stat-value { font-size: 28px; font-weight: bold; margin-top: 8px; }
-        
         .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; }
         .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        
-        .employee-item { display: grid; grid-template-columns: 200px 1fr 80px 100px 120px; gap: 12px; align-items: center; padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
-        .employee-item button { padding: 6px 12px; font-size: 12px; border: 1px solid #ddd; background: white; border-radius: 4px; cursor: pointer; }
-        .employee-item button:hover { background: #f0f0f0; }
-        
-        .approval-item { padding: 15px; background: #f9f9f9; border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #f39c12; }
-        .approval-item.approved { border-left-color: #27ae60; background: #f0fdf4; }
-        
+        .employee-item { display: grid; grid-template-columns: 200px 1fr 80px 100px 120px; gap: 12px; align-items: center; padding: 12px; background: var(--item); border-radius: 6px; margin-bottom: 8px; font-size: 14px; }
+        .employee-item button { padding: 6px 12px; font-size: 12px; border: 1px solid var(--border); background: var(--emp-btn-bg); color: var(--text); border-radius: 4px; cursor: pointer; }
+        .employee-item button:hover { opacity: 0.8; }
+        .approval-item { padding: 15px; background: var(--item); border-radius: 6px; margin-bottom: 12px; border-left: 4px solid #f39c12; }
+        .approval-item.approved { border-left-color: #27ae60; }
         .approval-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
         .approval-name { font-weight: 500; }
         .status-badge { display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; }
         .status-pending { background: #fff3cd; color: #856404; }
         .status-approved { background: #d4edda; color: #155724; }
-        
         .approval-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
         .approval-actions button { padding: 8px 12px; font-size: 12px; border: none; border-radius: 4px; cursor: pointer; color: white; }
         .btn-approve { background: #27ae60; }
         .btn-approve:hover { background: #229954; }
         .btn-reject { background: #e74c3c; }
         .btn-reject:hover { background: #c0392b; }
-        
         .hidden { display: none !important; }
 
         @media (max-width: 768px) {
@@ -92,17 +92,17 @@
     </style>
 </head>
 <body>
-    <div id="loginPage" class="login-container" style="max-width: 400px; margin: 50px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+    <div id="loginPage" style="max-width: 400px; margin: 50px auto; padding: 30px; background: var(--card); color: var(--text); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15);">
         <h1 style="font-size: 24px; margin-bottom: 20px; text-align: center;">Manager Dashboard</h1>
         <div id="loginAlert"></div>
         <form onsubmit="loginManager(event)">
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Email:</label>
-                <input type="email" id="loginEmail" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" required>
+                <input type="email" id="loginEmail" style="width: 100%; padding: 10px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 4px; font-size: 14px;" required>
             </div>
             <div style="margin-bottom: 15px;">
                 <label style="display: block; margin-bottom: 5px; font-weight: 500;">Password:</label>
-                <input type="password" id="loginPassword" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px;" required>
+                <input type="password" id="loginPassword" style="width: 100%; padding: 10px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 4px; font-size: 14px;" required>
             </div>
             <button type="submit" style="width: 100%; padding: 10px; background: #3498db; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Login</button>
         </form>
@@ -114,8 +114,11 @@
                 <h1>Manager Dashboard</h1>
                 <div class="user-info">
                     <span class="admin-badge">👔 Admin</span>
-                    <div style="margin-top: 8px;">Welcome, <strong id="userName">Manager</strong></div>
-                    <button class="logout-btn" onclick="logoutManager()">Logout</button>
+                    <div>Welcome, <strong id="userName">Manager</strong></div>
+                    <div class="header-actions">
+                        <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+                        <button class="logout-btn" onclick="logoutManager()">Logout</button>
+                    </div>
                 </div>
             </div>
 
@@ -308,6 +311,21 @@
         let currentUser = null;
         let token = null;
         let employeesCache = null;
+
+        function toggleDark() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        (function() {
+            const t = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            document.addEventListener('DOMContentLoaded', function() {
+                const btn = document.getElementById('darkToggle');
+                if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+            });
+        })();
 
         function toast(msg, type = 'success') {
             const el = document.createElement('div');

@@ -6,33 +6,39 @@
     <title>Timesheet - Employee App</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
     <style>
+        :root {
+            --bg: #f5f5f5; --card: #ffffff; --text: #333333; --text2: #666666;
+            --border: #dddddd; --item: #f9f9f9; --header: #ffffff;
+            --input-bg: #ffffff; --input-border: #dddddd;
+        }
+        [data-theme="dark"] {
+            --bg: #0f1117; --card: #1e1e2e; --text: #e0e0e0; --text2: #aaaaaa;
+            --border: #333344; --item: #252535; --header: #1a1a2a;
+            --input-bg: #252535; --input-border: #444455;
+        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f5f5f5; color: #333; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
         
         .container { max-width: 900px; margin: 0 auto; padding: 20px; }
-        
-        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .header { background: var(--header); padding: 20px; border-radius: 8px; margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
         .header h1 { font-size: 24px; }
-        .user-info { text-align: right; }
-        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; margin-top: 8px; }
+        .user-info { text-align: right; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+        .header-actions { display: flex; gap: 8px; align-items: center; }
+        .logout-btn { padding: 8px 16px; background: #e74c3c; color: white; border: none; border-radius: 4px; cursor: pointer; }
         .logout-btn:hover { background: #c0392b; }
-        
-        .tabs { display: flex; gap: 0; border-bottom: 1px solid #ddd; margin-bottom: 20px; background: white; border-radius: 8px 8px 0 0; }
-        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #666; border-bottom: 3px solid transparent; }
+        .dark-toggle { padding: 8px 12px; background: var(--item); color: var(--text); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-size: 16px; }
+        .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin-bottom: 20px; background: var(--card); border-radius: 8px 8px 0 0; }
+        .tab { padding: 15px 20px; border: none; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--text2); border-bottom: 3px solid transparent; }
         .tab.active { color: #3498db; border-bottom-color: #3498db; }
-        .tab:hover { color: #333; }
-        
+        .tab:hover { color: var(--text); }
         .tab-content { display: none; }
         .tab-content.active { display: block; }
-        
-        .card { background: white; padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
-        .card h2 { font-size: 18px; margin-bottom: 15px; color: #333; }
-        
+        .card { background: var(--card); padding: 20px; border-radius: 8px; margin-bottom: 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .card h2 { font-size: 18px; margin-bottom: 15px; color: var(--text); }
         .shift-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-bottom: 20px; }
-        .shift-item { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
-        .shift-label { font-size: 12px; color: #666; text-transform: uppercase; margin-bottom: 5px; }
-        .shift-value { font-size: 24px; font-weight: bold; color: #333; }
-        
+        .shift-item { background: var(--item); padding: 15px; border-radius: 6px; text-align: center; }
+        .shift-label { font-size: 12px; color: var(--text2); text-transform: uppercase; margin-bottom: 5px; }
+        .shift-value { font-size: 24px; font-weight: bold; color: var(--text); }
         .button-group { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
         button { padding: 12px 16px; border: none; border-radius: 6px; font-size: 14px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
         .btn-primary { background: #27ae60; color: white; }
@@ -41,33 +47,31 @@
         .btn-secondary:hover { background: #2980b9; }
         .btn-danger { background: #e74c3c; color: white; }
         .btn-danger:hover { background: #c0392b; }
-        
         .alert { padding: 12px; border-radius: 6px; margin-bottom: 15px; }
         .alert-success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
         .alert-error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
         .alert-info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-        
         .activity-log { max-height: 400px; overflow-y: auto; }
-        .activity-item { padding: 12px; background: #f9f9f9; border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #3498db; }
-        .activity-time { font-size: 12px; color: #666; }
+        .activity-item { padding: 12px; background: var(--item); border-radius: 6px; margin-bottom: 8px; border-left: 4px solid #3498db; }
+        .activity-time { font-size: 12px; color: var(--text2); }
         .activity-text { font-size: 14px; font-weight: 500; margin-top: 4px; }
-        
         .stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; }
-        .stat { background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center; }
-        .stat-label { font-size: 12px; color: #666; }
+        .stat { background: var(--item); padding: 15px; border-radius: 6px; text-align: center; }
+        .stat-label { font-size: 12px; color: var(--text2); }
         .stat-value { font-size: 28px; font-weight: bold; margin-top: 8px; }
-        
         .status-badge { display: inline-block; padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
         .status-active { background: #d4edda; color: #155724; }
         .status-pending { background: #fff3cd; color: #856404; }
         .status-approved { background: #d1ecf1; color: #0c5460; }
-        
-        .login-container { max-width: 400px; margin: 50px auto; padding: 30px; background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        .login-container { max-width: 400px; margin: 50px auto; padding: 30px; background: var(--card); border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
         .login-container h1 { font-size: 24px; margin-bottom: 20px; text-align: center; }
         .form-group { margin-bottom: 15px; }
         .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
-        .form-group input { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; }
+        .form-group input { width: 100%; padding: 10px; border: 1px solid var(--input-border); background: var(--input-bg); color: var(--text); border-radius: 4px; font-size: 14px; }
         .form-group input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.1); }
+        #notifPanel { background: var(--card); color: var(--text); }
+        .notif-item { border-bottom-color: var(--border); }
+        .notif-item.unread { background: var(--item); }
         
         .hidden { display: none !important; }
 
@@ -170,7 +174,10 @@
                 <h1>Timesheet System</h1>
                 <div class="user-info">
                     <div>Welcome, <strong id="userName">User</strong></div>
-                    <button class="logout-btn" onclick="logout()">Logout</button>
+                    <div class="header-actions">
+                        <button class="dark-toggle" id="darkToggle" onclick="toggleDark()" title="Toggle dark mode">🌙</button>
+                        <button class="logout-btn" onclick="logout()">Logout</button>
+                    </div>
                 </div>
             </div>
 
@@ -285,6 +292,21 @@
         const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
         let currentUser = null;
         let token = null;
+
+        function toggleDark() {
+            const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+            document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+            document.getElementById('darkToggle').textContent = isDark ? '🌙' : '☀️';
+            localStorage.setItem('theme', isDark ? 'light' : 'dark');
+        }
+        (function() {
+            const t = localStorage.getItem('theme') || 'light';
+            document.documentElement.setAttribute('data-theme', t);
+            document.addEventListener('DOMContentLoaded', function() {
+                const btn = document.getElementById('darkToggle');
+                if (btn) btn.textContent = t === 'dark' ? '☀️' : '🌙';
+            });
+        })();
 
         // Check if user is logged in
         function checkLogin() {

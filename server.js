@@ -4,59 +4,54 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const transporter = nodemailer.createTransport({
-  host: 'smtp-relay.brevo.com',
-  port: 587,
-  secure: false,
-  auth: {
-    user: process.env.BREVO_USER,
-    pass: process.env.BREVO_PASS
-  }
-});
-
-async function sendNotifEmail(to, name, subject, bodyHtml) {
-  if (!process.env.BREVO_USER || !process.env.BREVO_PASS) return;
-  const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+async function brevoSend(to, toName, subject, html) {
+  if (!process.env.BREVO_PASS) return;
   try {
-    await transporter.sendMail({
-      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
-      to, subject,
-      html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-        <h2 style="color:#3498db;">Salut, ${name}!</h2>
-        ${bodyHtml}
-        <a href="${appUrl}" style="background:#3498db;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px;">Vezi în aplicație</a>
-      </div>`
+    const res = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: {
+        'accept': 'application/json',
+        'api-key': process.env.BREVO_PASS,
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        sender: { name: 'Timesheet App', email: 'ae57f4001@smtp-brevo.com' },
+        to: [{ email: to, name: toName || to }],
+        subject,
+        htmlContent: html
+      })
     });
+    if (!res.ok) console.error('Brevo error:', await res.text());
   } catch (err) {
-    console.error('Email error:', err.message);
+    console.error('Brevo fetch error:', err.message);
   }
 }
 
-async function sendWelcomeEmail(to, name, password) {
-  if (!process.env.BREVO_USER || !process.env.BREVO_PASS) return;
+async function sendNotifEmail(to, name, subject, bodyHtml) {
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
-  try {
-    await transporter.sendMail({
-      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
-      to,
-      subject: 'Contul tău Timesheet a fost creat',
-      html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-        <h2 style="color:#3498db;">Bun venit, ${name}!</h2>
-        <p>Managerul tău ți-a creat un cont în aplicația de pontaj.</p>
-        <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
-          <p><strong>Email:</strong> ${to}</p>
-          <p><strong>Parolă:</strong> ${password}</p>
-        </div>
-        <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:10px;">Accesează aplicația</a>
-        <p style="color:#999;font-size:12px;margin-top:20px;">Te rugăm să îți schimbi parola după prima autentificare.</p>
-      </div>`
-    });
-  } catch (err) {
-    console.error('Email error:', err.message);
-  }
+  brevoSend(to, name, subject, `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+    <h2 style="color:#3498db;">Salut, ${name}!</h2>
+    ${bodyHtml}
+    <a href="${appUrl}" style="background:#3498db;color:white;padding:10px 20px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:16px;">Vezi în aplicație</a>
+  </div>`);
+}
+
+async function sendWelcomeEmail(to, name, password) {
+  const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+  brevoSend(to, name, 'Contul tău Timesheet a fost creat',
+    `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+      <h2 style="color:#3498db;">Bun venit, ${name}!</h2>
+      <p>Managerul tău ți-a creat un cont în aplicația de pontaj.</p>
+      <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
+        <p><strong>Email:</strong> ${to}</p>
+        <p><strong>Parolă:</strong> ${password}</p>
+      </div>
+      <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:10px;">Accesează aplicația</a>
+      <p style="color:#999;font-size:12px;margin-top:20px;">Te rugăm să îți schimbi parola după prima autentificare.</p>
+    </div>`
+  );
 }
 
 const app = express();
@@ -636,13 +631,18 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   const user = await User.findById(req.userId);
   if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
-    const info = await transporter.sendMail({
-      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
-      to: user.email,
-      subject: 'Test email Timesheet',
-      text: 'Emailul functioneaza!'
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_PASS, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: { name: 'Timesheet App', email: 'ae57f4001@smtp-brevo.com' },
+        to: [{ email: user.email, name: user.name }],
+        subject: 'Test email Timesheet',
+        htmlContent: '<p>Emailul functioneaza!</p>'
+      })
     });
-    res.json({ ok: true, messageId: info.messageId });
+    const result = await r.json();
+    res.json({ ok: r.ok, status: r.status, result });
   } catch (err) {
     res.json({ ok: false, error: err.message });
   }

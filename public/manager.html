@@ -533,16 +533,17 @@
             const email = document.getElementById('newEmail').value;
             const password = document.getElementById('newPassword').value;
             const msgEl = document.getElementById('createUserMsg');
+            const t = token || localStorage.getItem('managerToken');
 
             try {
                 const response = await fetch(`${API_URL}/api/manager/create-employee`, {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, email, password })
                 });
                 const data = await response.json();
                 if (response.ok) {
-                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat pentru ${name}!</div>`;
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat pentru ${name}! Email de bun venit trimis.</div>`;
                     document.getElementById('newName').value = '';
                     document.getElementById('newEmail').value = '';
                     document.getElementById('newPassword').value = '';

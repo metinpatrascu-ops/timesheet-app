@@ -4,7 +4,45 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
+
+// Email transporter
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.GMAIL_USER,
+    pass: process.env.GMAIL_PASS
+  }
+});
+
+async function sendWelcomeEmail(to, name, password) {
+  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return;
+  const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+  try {
+    await transporter.sendMail({
+      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+      to,
+      subject: 'Contul tău Timesheet a fost creat',
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+          <h2 style="color:#3498db;">Bun venit, ${name}!</h2>
+          <p>Managerul tău ți-a creat un cont în aplicația de pontaj.</p>
+          <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
+            <p><strong>Email:</strong> ${to}</p>
+            <p><strong>Parolă:</strong> ${password}</p>
+          </div>
+          <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:10px;">
+            Accesează aplicația
+          </a>
+          <p style="color:#999;font-size:12px;margin-top:20px;">Te rugăm să îți schimbi parola după prima autentificare.</p>
+        </div>
+      `
+    });
+  } catch (err) {
+    console.error('Email error:', err.message);
+  }
+}
 
 const app = express();
 
@@ -444,6 +482,7 @@ app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUser = new User({ email, password: hashedPassword, name, role: 'employee' });
     await newUser.save();
+    await sendWelcomeEmail(email, name, password);
     res.json({ message: 'Employee created', user: { id: newUser._id, email: newUser.email, name: newUser.name } });
   } catch (err) {
     res.status(500).json({ error: err.message });

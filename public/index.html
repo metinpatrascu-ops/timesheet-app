@@ -300,7 +300,7 @@
             localStorage.setItem('theme', isDark ? 'light' : 'dark');
         }
         (function() {
-            const t = localStorage.getItem('theme') || 'light';
+            const t = localStorage.getItem('theme') || 'dark';
             document.documentElement.setAttribute('data-theme', t);
             document.addEventListener('DOMContentLoaded', function() {
                 const btn = document.getElementById('darkToggle');

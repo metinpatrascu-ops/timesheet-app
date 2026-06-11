@@ -93,6 +93,8 @@
                 <button class="tab active" onclick="switchTab(event, 'overview')"><i class="ti ti-layout-grid"></i> Overview</button>
                 <button class="tab" onclick="switchTab(event, 'approvals')"><i class="ti ti-checkbox"></i> Aprobari</button>
                 <button class="tab" onclick="switchTab(event, 'employees')"><i class="ti ti-users"></i> Angajati</button>
+                <button class="tab" onclick="switchTab(event, 'addday')"><i class="ti ti-calendar-plus"></i> Adauga Zi</button>
+                <button class="tab" onclick="switchTab(event, 'createuser')"><i class="ti ti-user-plus"></i> Creeaza Cont</button>
                 <button class="tab" onclick="switchTab(event, 'reports')"><i class="ti ti-chart-bar"></i> Rapoarte</button>
             </div>
 
@@ -145,6 +147,68 @@
                     <h2>Gestionare Angajati</h2>
                     <div id="employeesList">
                         <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ADD DAY TAB -->
+            <div id="addday" class="tab-content">
+                <div class="card">
+                    <h2>Adauga Zi de Munca pentru Angajat</h2>
+                    <div id="addDayMsg"></div>
+                    <form onsubmit="addWorkDay(event)" style="max-width:500px;">
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Angajat:</label>
+                            <select id="addDayEmployee" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                                <option value="">-- Selecteaza angajat --</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Data:</label>
+                            <input type="date" id="addDayDate" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px;">
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">Check In:</label>
+                                <input type="time" id="addDayCheckIn" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                            </div>
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">Check Out:</label>
+                                <input type="time" id="addDayCheckOut" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Note (optional):</label>
+                            <input type="text" id="addDayNotes" placeholder="ex: zi normala, deplasare..." style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;">
+                        </div>
+                        <button type="submit" style="padding:10px 20px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">Adauga Zi</button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- CREATE USER TAB -->
+            <div id="createuser" class="tab-content">
+                <div class="card">
+                    <h2>Creeaza Cont Angajat</h2>
+                    <div id="createUserMsg"></div>
+                    <form onsubmit="createEmployee(event)" style="max-width:500px;">
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Nume complet:</label>
+                            <input type="text" id="newName" placeholder="ex: Ion Popescu" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Email:</label>
+                            <input type="email" id="newEmail" placeholder="angajat@company.com" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Parola:</label>
+                            <input type="password" id="newPassword" placeholder="minim 6 caractere" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required minlength="6">
+                        </div>
+                        <button type="submit" style="padding:10px 20px;background:#3498db;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">Creeaza Cont</button>
+                    </form>
+                    <div style="margin-top:25px;">
+                        <h3 style="font-size:16px;margin-bottom:10px;">Conturi existente:</h3>
+                        <div id="employeesListCreate"><p style="color:#999;">Loading...</p></div>
                     </div>
                 </div>
             </div>
@@ -426,6 +490,107 @@
             } catch (err) {
                 console.error(err);
             }
+        }
+
+        // Load employees for dropdowns
+        async function loadEmployeesForForms() {
+            try {
+                const response = await fetch(`${API_URL}/api/admin/employees`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const employees = data.employees || [];
+
+                // Populate dropdown for add day
+                const sel = document.getElementById('addDayEmployee');
+                sel.innerHTML = '<option value="">-- Selecteaza angajat --</option>' +
+                    employees.map(e => `<option value="${e._id}">${e.name} (${e.email})</option>`).join('');
+
+                // List in create user tab
+                const list = document.getElementById('employeesListCreate');
+                if (employees.length === 0) {
+                    list.innerHTML = '<p style="color:#999;">Niciun angajat creat încă.</p>';
+                } else {
+                    list.innerHTML = employees.map(e => `
+                        <div style="padding:10px;background:#f9f9f9;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+                            <div>
+                                <strong>${e.name}</strong>
+                                <span style="color:#666;font-size:13px;margin-left:10px;">${e.email}</span>
+                            </div>
+                            <span style="background:#d4edda;color:#155724;padding:3px 8px;border-radius:4px;font-size:11px;">Angajat</span>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        // Create employee
+        async function createEmployee(event) {
+            event.preventDefault();
+            const name = document.getElementById('newName').value;
+            const email = document.getElementById('newEmail').value;
+            const password = document.getElementById('newPassword').value;
+            const msgEl = document.getElementById('createUserMsg');
+
+            try {
+                const response = await fetch(`${API_URL}/api/manager/create-employee`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name, email, password })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat pentru ${name}!</div>`;
+                    document.getElementById('newName').value = '';
+                    document.getElementById('newEmail').value = '';
+                    document.getElementById('newPassword').value = '';
+                    loadEmployeesForForms();
+                } else {
+                    msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
+                }
+            } catch (err) {
+                msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ Eroare: ${err.message}</div>`;
+            }
+        }
+
+        // Add work day
+        async function addWorkDay(event) {
+            event.preventDefault();
+            const employeeId = document.getElementById('addDayEmployee').value;
+            const date = document.getElementById('addDayDate').value;
+            const checkIn = document.getElementById('addDayCheckIn').value;
+            const checkOut = document.getElementById('addDayCheckOut').value;
+            const notes = document.getElementById('addDayNotes').value;
+            const msgEl = document.getElementById('addDayMsg');
+
+            try {
+                const response = await fetch(`${API_URL}/api/manager/add-timesheet`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ employeeId, date, checkIn, checkOut, notes })
+                });
+                const data = await response.json();
+                if (response.ok) {
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Zi adăugată și aprobată! Angajatul a fost notificat.</div>`;
+                    document.getElementById('addDayDate').value = '';
+                    document.getElementById('addDayCheckIn').value = '';
+                    document.getElementById('addDayCheckOut').value = '';
+                    document.getElementById('addDayNotes').value = '';
+                } else {
+                    msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
+                }
+            } catch (err) {
+                msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ Eroare: ${err.message}</div>`;
+            }
+        }
+
+        // Override showApp to also load forms
+        const _origShowApp = showApp;
+        function showApp() {
+            _origShowApp();
+            loadEmployeesForForms();
         }
 
         // Initialize

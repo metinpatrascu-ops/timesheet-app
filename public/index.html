@@ -70,6 +70,16 @@
         .form-group input:focus { outline: none; border-color: #3498db; box-shadow: 0 0 0 3px rgba(52,152,219,0.1); }
         
         .hidden { display: none !important; }
+
+        /* Notificari */
+        #notifBell { position: fixed; bottom: 24px; right: 24px; z-index: 999; }
+        #notifBtn { background: #3498db; color: white; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 22px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); position: relative; }
+        #notifCount { position: absolute; top: -4px; right: -4px; background: #e74c3c; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+        #notifPanel { position: fixed; bottom: 90px; right: 24px; width: 320px; background: white; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); display: none; z-index: 998; max-height: 400px; overflow-y: auto; }
+        #notifPanel.open { display: block; }
+        .notif-item { padding: 12px 15px; border-bottom: 1px solid #eee; font-size: 13px; }
+        .notif-item.unread { background: #f0f8ff; border-left: 3px solid #3498db; }
+        .notif-time { font-size: 11px; color: #999; margin-top: 4px; }
         
         .loading { text-align: center; color: #666; padding: 20px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
@@ -115,6 +125,21 @@
                 Ai deja cont? <a href="#" onclick="toggleRegister(event)" style="color: #3498db; text-decoration: none;">Login</a>
             </p>
         </form>
+    </div>
+
+    <!-- Notification Bell -->
+    <div id="notifBell" class="hidden">
+        <button id="notifBtn" onclick="toggleNotifPanel()">
+            🔔
+            <span id="notifCount" style="display:none;">0</span>
+        </button>
+    </div>
+    <div id="notifPanel">
+        <div style="padding:12px 15px;font-weight:600;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+            Notificari
+            <button onclick="markAllRead()" style="font-size:11px;background:#3498db;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;">Toate citite</button>
+        </div>
+        <div id="notifList"><p style="padding:15px;color:#999;font-size:13px;">Nicio notificare.</p></div>
     </div>
 
     <div id="appPage" class="hidden">
@@ -558,8 +583,96 @@
             setTimeout(() => { alertDiv.innerHTML = ''; }, 5000);
         }
 
+        // Notifications
+        let notifInterval = null;
+
+        function toggleNotifPanel() {
+            const panel = document.getElementById('notifPanel');
+            panel.classList.toggle('open');
+            if (panel.classList.contains('open')) loadNotifications();
+        }
+
+        async function loadNotifications() {
+            try {
+                const response = await fetch(`${API_URL}/api/notifications`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                const notifications = data.notifications || [];
+                const unread = notifications.filter(n => !n.read).length;
+
+                const countEl = document.getElementById('notifCount');
+                if (unread > 0) {
+                    countEl.textContent = unread;
+                    countEl.style.display = 'flex';
+                } else {
+                    countEl.style.display = 'none';
+                }
+
+                const listEl = document.getElementById('notifList');
+                if (notifications.length === 0) {
+                    listEl.innerHTML = '<p style="padding:15px;color:#999;font-size:13px;">Nicio notificare.</p>';
+                } else {
+                    listEl.innerHTML = notifications.map(n => `
+                        <div class="notif-item ${n.read ? '' : 'unread'}" onclick="markRead('${n._id}', this)">
+                            <div>${n.message}</div>
+                            <div class="notif-time">${new Date(n.createdAt).toLocaleString('ro-RO')}</div>
+                        </div>
+                    `).join('');
+                }
+            } catch (err) {
+                console.error(err);
+            }
+        }
+
+        async function markRead(id, el) {
+            try {
+                await fetch(`${API_URL}/api/notifications/${id}/read`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                el.classList.remove('unread');
+                loadNotifications();
+            } catch (err) {}
+        }
+
+        async function markAllRead() {
+            try {
+                const response = await fetch(`${API_URL}/api/notifications`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await response.json();
+                for (const n of (data.notifications || [])) {
+                    if (!n.read) {
+                        await fetch(`${API_URL}/api/notifications/${n._id}/read`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                    }
+                }
+                loadNotifications();
+            } catch (err) {}
+        }
+
+        function startNotifPolling() {
+            document.getElementById('notifBell').classList.remove('hidden');
+            loadNotifications();
+            notifInterval = setInterval(loadNotifications, 30000); // poll every 30s
+        }
+
+        // Patch showApp to start notifications
+        const _origCheckLogin = checkLogin;
+        const origShowApp = typeof showApp === 'function' ? showApp : null;
+
         // Initialize
         checkLogin();
+        // Start polling after login is detected
+        const _tokenCheck = setInterval(() => {
+            if (token) {
+                startNotifPolling();
+                clearInterval(_tokenCheck);
+            }
+        }, 500);
     </script>
 </body>
 </html>

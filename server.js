@@ -51,8 +51,16 @@ const timesheetSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const notificationSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  message: { type: String, required: true },
+  read: { type: Boolean, default: false },
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', userSchema);
 const Timesheet = mongoose.model('Timesheet', timesheetSchema);
+const Notification = mongoose.model('Notification', notificationSchema);
 
 // Helper function to generate JWT
 const generateToken = (userId) => {
@@ -414,6 +422,112 @@ app.get('/api/admin/employees', verifyToken, async (req, res) => {
 
     const employees = await User.find({ role: 'employee' }).select('-password');
     res.json({ employees });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Create employee account
+app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const { email, password, name } = req.body;
+    if (!email || !password || !name) {
+      return res.status(400).json({ error: 'Email, password and name required' });
+    }
+    const existing = await User.findOne({ email });
+    if (existing) return res.status(400).json({ error: 'Email already exists' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const newUser = new User({ email, password: hashedPassword, name, role: 'employee' });
+    await newUser.save();
+    res.json({ message: 'Employee created', user: { id: newUser._id, email: newUser.email, name: newUser.name } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Add timesheet entry manually for an employee
+app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const { employeeId, date, checkIn, checkOut, notes } = req.body;
+    if (!employeeId || !date || !checkIn || !checkOut) {
+      return res.status(400).json({ error: 'employeeId, date, checkIn, checkOut required' });
+    }
+
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    let timesheet = await Timesheet.findOne({
+      userId: employeeId,
+      date: { $gte: dateObj, $lt: new Date(dateObj.getTime() + 24*60*60*1000) }
+    });
+
+    const checkInDate = new Date(`${date}T${checkIn}:00`);
+    const checkOutDate = new Date(`${date}T${checkOut}:00`);
+    const totalMs = checkOutDate - checkInDate;
+    const totalHours = Math.round((totalMs / (1000 * 60 * 60)) * 2) / 2;
+
+    if (timesheet) {
+      timesheet.checkIn = checkInDate;
+      timesheet.checkOut = checkOutDate;
+      timesheet.totalHours = totalHours;
+      timesheet.notes = notes || timesheet.notes;
+      timesheet.status = 'approved';
+      timesheet.approvedBy = req.userId;
+      timesheet.approvedAt = new Date();
+    } else {
+      timesheet = new Timesheet({
+        userId: employeeId,
+        date: dateObj,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        totalHours,
+        status: 'approved',
+        approvedBy: req.userId,
+        approvedAt: new Date(),
+        notes: notes || ''
+      });
+    }
+    await timesheet.save();
+
+    // Add notification for employee
+    await Notification.create({
+      userId: employeeId,
+      message: `Managerul a adăugat/actualizat ziua de ${date}. Ore lucrate: ${totalHours}h. Status: Aprobat.`,
+      createdAt: new Date()
+    });
+
+    res.json({ message: 'Timesheet added', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get notifications for current user
+app.get('/api/notifications', verifyToken, async (req, res) => {
+  try {
+    const notifications = await Notification.find({ userId: req.userId })
+      .sort({ createdAt: -1 })
+      .limit(20);
+    res.json({ notifications });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Mark notification as read
+app.post('/api/notifications/:id/read', verifyToken, async (req, res) => {
+  try {
+    await Notification.findByIdAndUpdate(req.params.id, { read: true });
+    res.json({ message: 'Marked as read' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

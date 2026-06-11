@@ -84,6 +84,28 @@
         .loading { text-align: center; color: #666; padding: 20px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        @media (max-width: 600px) {
+            .container { padding: 10px; }
+            .header { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; }
+            .header h1 { font-size: 18px; }
+            .user-info { text-align: left; width: 100%; display: flex; justify-content: space-between; align-items: center; }
+            .logout-btn { margin-top: 0; padding: 6px 12px; font-size: 13px; }
+            .tabs { overflow-x: auto; border-radius: 8px 8px 0 0; -webkit-overflow-scrolling: touch; }
+            .tabs::-webkit-scrollbar { display: none; }
+            .tab { padding: 12px 14px; font-size: 12px; white-space: nowrap; }
+            .card { padding: 14px; }
+            .card h2 { font-size: 16px; }
+            .shift-grid { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+            .shift-value { font-size: 18px; }
+            .shift-label { font-size: 11px; }
+            .stats { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .stat-value { font-size: 22px; }
+            .button-group { grid-template-columns: 1fr 1fr; gap: 8px; }
+            button { padding: 10px 12px; font-size: 13px; }
+            #notifPanel { width: calc(100vw - 24px); right: 12px; bottom: 80px; }
+            .login-container { margin: 20px auto; padding: 20px; }
+        }
     </style>
 </head>
 <body>

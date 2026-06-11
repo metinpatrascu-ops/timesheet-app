@@ -17,7 +17,7 @@ async function brevoSend(to, toName, subject, html) {
         'content-type': 'application/json'
       },
       body: JSON.stringify({
-        sender: { name: 'Timesheet App', email: 'ae57f4001@smtp-brevo.com' },
+        sender: { name: 'Timesheet App', email: 'metinpatrascu@gmail.com' },
         to: [{ email: to, name: toName || to }],
         subject,
         htmlContent: html
@@ -635,7 +635,7 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
       method: 'POST',
       headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_PASS, 'content-type': 'application/json' },
       body: JSON.stringify({
-        sender: { name: 'Timesheet App', email: 'ae57f4001@smtp-brevo.com' },
+        sender: { name: 'Timesheet App', email: 'metinpatrascu@gmail.com' },
         to: [{ email: user.email, name: user.name }],
         subject: 'Test email Timesheet',
         htmlContent: '<p>Emailul functioneaza!</p>'

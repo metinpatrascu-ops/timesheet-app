@@ -4,20 +4,26 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-const { Resend } = require('resend');
+const nodemailer = require('nodemailer');
 require('dotenv').config();
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const FROM_EMAIL = 'Timesheet App <onboarding@resend.dev>';
+const transporter = nodemailer.createTransport({
+  host: 'smtp-relay.brevo.com',
+  port: 587,
+  secure: false,
+  auth: {
+    user: process.env.BREVO_USER,
+    pass: process.env.BREVO_PASS
+  }
+});
 
 async function sendNotifEmail(to, name, subject, bodyHtml) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.BREVO_USER || !process.env.BREVO_PASS) return;
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
-      to,
-      subject,
+    await transporter.sendMail({
+      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
+      to, subject,
       html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
         <h2 style="color:#3498db;">Salut, ${name}!</h2>
         ${bodyHtml}
@@ -30,11 +36,11 @@ async function sendNotifEmail(to, name, subject, bodyHtml) {
 }
 
 async function sendWelcomeEmail(to, name, password) {
-  if (!process.env.RESEND_API_KEY) return;
+  if (!process.env.BREVO_USER || !process.env.BREVO_PASS) return;
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
   try {
-    await resend.emails.send({
-      from: FROM_EMAIL,
+    await transporter.sendMail({
+      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
       to,
       subject: 'Contul tău Timesheet a fost creat',
       html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
@@ -630,15 +636,15 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   const user = await User.findById(req.userId);
   if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
-    const result = await resend.emails.send({
-      from: FROM_EMAIL,
+    const info = await transporter.sendMail({
+      from: '"Timesheet App" <ae57f4001@smtp-brevo.com>',
       to: user.email,
       subject: 'Test email Timesheet',
       text: 'Emailul functioneaza!'
     });
-    res.json({ ok: true, id: result.id, apiKey: process.env.RESEND_API_KEY ? 'set' : 'NOT SET' });
+    res.json({ ok: true, messageId: info.messageId });
   } catch (err) {
-    res.json({ ok: false, error: err.message, apiKey: process.env.RESEND_API_KEY ? 'set' : 'NOT SET' });
+    res.json({ ok: false, error: err.message });
   }
 });
 

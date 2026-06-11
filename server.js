@@ -636,6 +636,22 @@ app.post('/api/notifications/:id/read', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/api/test-email', verifyToken, async (req, res) => {
+  const user = await User.findById(req.userId);
+  if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+  try {
+    const info = await transporter.sendMail({
+      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+      to: user.email,
+      subject: 'Test email Timesheet',
+      text: 'Emailul functioneaza!'
+    });
+    res.json({ ok: true, messageId: info.messageId, gmailUser: process.env.GMAIL_USER ? 'set' : 'NOT SET' });
+  } catch (err) {
+    res.json({ ok: false, error: err.message, code: err.code, gmailUser: process.env.GMAIL_USER ? 'set' : 'NOT SET' });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

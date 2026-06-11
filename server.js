@@ -4,28 +4,18 @@ const cors = require('cors');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const path = require('path');
-const nodemailer = require('nodemailer');
+const { Resend } = require('resend');
 require('dotenv').config();
 
-// Email transporter
-const transporter = nodemailer.createTransport({
-  host: 'smtp.gmail.com',
-  port: 587,
-  secure: false,
-  requireTLS: true,
-  family: 4,
-  auth: {
-    user: process.env.GMAIL_USER,
-    pass: process.env.GMAIL_PASS
-  }
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+const FROM_EMAIL = 'Timesheet App <onboarding@resend.dev>';
 
 async function sendNotifEmail(to, name, subject, bodyHtml) {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return;
+  if (!process.env.RESEND_API_KEY) return;
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
   try {
-    await transporter.sendMail({
-      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+    await resend.emails.send({
+      from: FROM_EMAIL,
       to,
       subject,
       html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
@@ -40,27 +30,23 @@ async function sendNotifEmail(to, name, subject, bodyHtml) {
 }
 
 async function sendWelcomeEmail(to, name, password) {
-  if (!process.env.GMAIL_USER || !process.env.GMAIL_PASS) return;
+  if (!process.env.RESEND_API_KEY) return;
   const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
   try {
-    await transporter.sendMail({
-      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+    await resend.emails.send({
+      from: FROM_EMAIL,
       to,
       subject: 'Contul tău Timesheet a fost creat',
-      html: `
-        <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
-          <h2 style="color:#3498db;">Bun venit, ${name}!</h2>
-          <p>Managerul tău ți-a creat un cont în aplicația de pontaj.</p>
-          <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
-            <p><strong>Email:</strong> ${to}</p>
-            <p><strong>Parolă:</strong> ${password}</p>
-          </div>
-          <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:10px;">
-            Accesează aplicația
-          </a>
-          <p style="color:#999;font-size:12px;margin-top:20px;">Te rugăm să îți schimbi parola după prima autentificare.</p>
+      html: `<div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+        <h2 style="color:#3498db;">Bun venit, ${name}!</h2>
+        <p>Managerul tău ți-a creat un cont în aplicația de pontaj.</p>
+        <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
+          <p><strong>Email:</strong> ${to}</p>
+          <p><strong>Parolă:</strong> ${password}</p>
         </div>
-      `
+        <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;margin-top:10px;">Accesează aplicația</a>
+        <p style="color:#999;font-size:12px;margin-top:20px;">Te rugăm să îți schimbi parola după prima autentificare.</p>
+      </div>`
     });
   } catch (err) {
     console.error('Email error:', err.message);
@@ -644,15 +630,15 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   const user = await User.findById(req.userId);
   if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
   try {
-    const info = await transporter.sendMail({
-      from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+    const result = await resend.emails.send({
+      from: FROM_EMAIL,
       to: user.email,
       subject: 'Test email Timesheet',
       text: 'Emailul functioneaza!'
     });
-    res.json({ ok: true, messageId: info.messageId, gmailUser: process.env.GMAIL_USER ? 'set' : 'NOT SET' });
+    res.json({ ok: true, id: result.id, apiKey: process.env.RESEND_API_KEY ? 'set' : 'NOT SET' });
   } catch (err) {
-    res.json({ ok: false, error: err.message, code: err.code, gmailUser: process.env.GMAIL_USER ? 'set' : 'NOT SET' });
+    res.json({ ok: false, error: err.message, apiKey: process.env.RESEND_API_KEY ? 'set' : 'NOT SET' });
   }
 });
 

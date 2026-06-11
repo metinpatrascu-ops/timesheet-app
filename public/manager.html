@@ -225,395 +225,359 @@
         </div>
     </div>
 
+    <style>
+        #toast { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:8px; pointer-events:none; }
+        .toast-msg { padding:12px 18px; border-radius:8px; color:white; font-size:14px; font-weight:500; opacity:0; transform:translateY(10px); transition:opacity .2s,transform .2s; pointer-events:none; max-width:320px; }
+        .toast-msg.show { opacity:1; transform:translateY(0); }
+        .toast-success { background:#27ae60; }
+        .toast-error   { background:#e74c3c; }
+        .btn-loading { opacity:.7; cursor:not-allowed; pointer-events:none; }
+        .confirm-inline { background:#fff3cd; border:1px solid #f39c12; border-radius:6px; padding:10px 14px; margin-top:6px; display:flex; align-items:center; gap:10px; font-size:13px; }
+        .confirm-inline button { padding:5px 12px; border:none; border-radius:4px; cursor:pointer; font-size:12px; font-weight:600; }
+        .confirm-yes { background:#e74c3c; color:white; }
+        .confirm-no  { background:#ddd; color:#333; }
+    </style>
+    <div id="toast"></div>
+
     <script>
         const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
         let currentUser = null;
         let token = null;
+        let employeesCache = null;
 
-        // Check login
+        function toast(msg, type = 'success') {
+            const el = document.createElement('div');
+            el.className = `toast-msg toast-${type}`;
+            el.textContent = msg;
+            document.getElementById('toast').appendChild(el);
+            requestAnimationFrame(() => { requestAnimationFrame(() => el.classList.add('show')); });
+            setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }, 3000);
+        }
+
+        function btnLoading(btn, loading, originalText) {
+            if (loading) { btn.dataset.orig = btn.innerHTML; btn.innerHTML = '⏳ Se trimite...'; btn.classList.add('btn-loading'); }
+            else { btn.innerHTML = btn.dataset.orig || originalText || btn.innerHTML; btn.classList.remove('btn-loading'); }
+        }
+
         function checkLogin() {
             const savedToken = localStorage.getItem('managerToken');
-            if (savedToken) {
-                token = savedToken;
-                fetchCurrentUser();
-            }
+            if (savedToken) { token = savedToken; fetchCurrentUser(); }
         }
 
-        // Fetch current user
         async function fetchCurrentUser() {
             try {
-                const response = await fetch(`${API_URL}/api/auth/me`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.user.role === 'manager' || data.user.role === 'admin') {
-                        currentUser = data.user;
-                        showApp();
-                    } else {
-                        logoutManager();
-                    }
-                } else {
-                    logoutManager();
-                }
-            } catch (err) {
-                console.error(err);
-                logoutManager();
-            }
+                const res = await fetch(`${API_URL}/api/auth/me`, { headers: { 'Authorization': `Bearer ${token}` } });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.user.role === 'manager' || data.user.role === 'admin') { currentUser = data.user; showApp(); }
+                    else logoutManager();
+                } else logoutManager();
+            } catch { logoutManager(); }
         }
 
-        // Login
         async function loginManager(event) {
             event.preventDefault();
-            const email = document.getElementById('loginEmail').value;
-            const password = document.getElementById('loginPassword').value;
-
+            const btn = event.target.querySelector('button[type=submit]');
+            btnLoading(btn, true);
             try {
-                const response = await fetch(`${API_URL}/api/auth/login`, {
+                const res = await fetch(`${API_URL}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, password })
+                    body: JSON.stringify({ email: document.getElementById('loginEmail').value, password: document.getElementById('loginPassword').value })
                 });
-
-                const data = await response.json();
-
-                if (response.ok && (data.user.role === 'manager' || data.user.role === 'admin')) {
-                    token = data.token;
-                    currentUser = data.user;
-                    localStorage.setItem('managerToken', token);
-                    showApp();
+                const data = await res.json();
+                if (res.ok && (data.user.role === 'manager' || data.user.role === 'admin')) {
+                    token = data.token; currentUser = data.user;
+                    localStorage.setItem('managerToken', token); showApp();
                 } else {
                     document.getElementById('loginAlert').innerHTML = `<div class="alert alert-info">Only managers can access this</div>`;
                 }
             } catch (err) {
                 document.getElementById('loginAlert').innerHTML = `<div class="alert alert-info">${err.message}</div>`;
-            }
+            } finally { btnLoading(btn, false); }
         }
 
-        // Logout
         function logoutManager() {
-            token = null;
-            currentUser = null;
+            token = null; currentUser = null; employeesCache = null;
             localStorage.removeItem('managerToken');
             document.getElementById('loginPage').classList.remove('hidden');
             document.getElementById('appPage').classList.add('hidden');
         }
 
-        // Show app
         function showApp() {
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('appPage').classList.remove('hidden');
             document.getElementById('userName').textContent = currentUser.name;
             loadOverview();
+            loadEmployeesForForms();
         }
 
-        // Switch tabs
         function switchTab(event, tabName) {
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
             event.target.closest('.tab').classList.add('active');
             document.getElementById(tabName).classList.add('active');
-
             if (tabName === 'approvals') loadApprovals();
             if (tabName === 'employees') loadEmployees();
             if (tabName === 'reports') loadReports();
         }
 
-        // Load overview
-        async function loadOverview() {
-            try {
-                // Get pending approvals
-                const appResponse = await fetch(`${API_URL}/api/manager/pending-approvals`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const appData = await appResponse.json();
-
-                // Get employees
-                const empResponse = await fetch(`${API_URL}/api/admin/employees`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const empData = empResponse.json();
-
-                document.getElementById('totalEmployees').textContent = appData.timesheets ? appData.timesheets.length : 0;
-                document.getElementById('approvalsToday').textContent = appData.timesheets?.filter(t => !t.checkOut).length || 0;
-
-                // Build team status
-                const teamHtml = appData.timesheets?.slice(0, 5).map(t => `
-                    <div class="employee-item">
-                        <span style="font-weight: 500;">${t.userId.name}</span>
-                        <div style="display: flex; gap: 8px;">
-                            <span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
-                                ${t.checkOut ? 'Completa' : 'In lucru'}
-                            </span>
-                        </div>
-                        <span>${t.totalHours || 0}h</span>
-                        <span style="color: #666; font-size: 12px;">${new Date(t.date).toLocaleDateString()}</span>
-                        <button onclick="viewEmployee('${t.userId._id}')">View</button>
-                    </div>
-                `).join('') || '<p style="color: #999;">No data</p>';
-
-                document.getElementById('teamStatus').innerHTML = teamHtml;
-            } catch (err) {
-                console.error(err);
-            }
+        async function apiFetch(url, opts = {}) {
+            const t = token || localStorage.getItem('managerToken');
+            return fetch(API_URL + url, { ...opts, headers: { 'Authorization': `Bearer ${t}`, ...opts.headers } });
         }
 
-        // Load approvals
-        async function loadApprovals() {
+        async function loadOverview() {
             try {
-                const response = await fetch(`${API_URL}/api/manager/pending-approvals`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
+                const [appRes, empRes] = await Promise.all([
+                    apiFetch('/api/manager/pending-approvals'),
+                    apiFetch('/api/admin/employees')
+                ]);
+                const [appData, empData] = await Promise.all([appRes.json(), empRes.json()]);
+                employeesCache = empData.employees || [];
 
+                document.getElementById('totalEmployees').textContent = employeesCache.length;
+                document.getElementById('approvalsToday').textContent = appData.timesheets?.filter(t => !t.checkOut).length || 0;
+
+                const teamHtml = appData.timesheets?.slice(0, 5).map(t => `
+                    <div class="employee-item">
+                        <span style="font-weight:500;">${t.userId.name}</span>
+                        <span style="background:#d4edda;color:#155724;padding:4px 8px;border-radius:4px;font-size:12px;">${t.checkOut ? 'Complet' : 'In lucru'}</span>
+                        <span>${t.totalHours || 0}h</span>
+                        <span style="color:#666;font-size:12px;">${new Date(t.date).toLocaleDateString('ro-RO')}</span>
+                        <span></span>
+                    </div>
+                `).join('') || '<p style="color:#999;">Nicio activitate.</p>';
+                document.getElementById('teamStatus').innerHTML = teamHtml;
+            } catch (err) { console.error(err); }
+        }
+
+        async function loadApprovals() {
+            document.getElementById('approvalsList').innerHTML = '<p style="color:#999;">Se încarcă...</p>';
+            try {
+                const res = await apiFetch('/api/manager/pending-approvals');
+                const data = await res.json();
                 const html = data.timesheets?.map(t => `
-                    <div class="approval-item">
+                    <div class="approval-item" id="appr-${t._id}">
                         <div class="approval-header">
-                            <span class="approval-name">${t.userId.name} - ${new Date(t.date).toLocaleDateString()}</span>
+                            <span class="approval-name">${t.userId.name} — ${new Date(t.date).toLocaleDateString('ro-RO')}</span>
                             <span class="status-badge status-${t.status}">${t.status}</span>
                         </div>
-                        <div style="font-size: 12px; color: #666; margin-bottom: 8px;">
+                        <div style="font-size:12px;color:#666;margin-bottom:8px;">
                             <strong>Ore:</strong> ${t.totalHours || 0}h | <strong>Status:</strong> ${t.checkOut ? 'Check in/out complet' : 'In progres'}
                         </div>
                         <div class="approval-actions">
-                            <button class="btn-approve" onclick="approveDay('${t._id}')"><i class="ti ti-circle-check"></i> Aproba</button>
-                            <button class="btn-reject" onclick="rejectDay('${t._id}')"><i class="ti ti-circle-x"></i> Respinge</button>
+                            <button class="btn-approve" onclick="approveDay('${t._id}',this)"><i class="ti ti-circle-check"></i> Aproba</button>
+                            <button class="btn-reject" onclick="rejectDay('${t._id}',this)"><i class="ti ti-circle-x"></i> Respinge</button>
                         </div>
                     </div>
-                `).join('') || '<p style="color: #999;">No pending approvals</p>';
-
+                `).join('') || '<p style="color:#999;">Nicio aprobare în așteptare.</p>';
                 document.getElementById('approvalsList').innerHTML = html;
-            } catch (err) {
-                console.error(err);
-            }
+            } catch { document.getElementById('approvalsList').innerHTML = '<p style="color:#999;">Eroare la încărcare.</p>'; }
         }
 
-        // Approve day
-        async function approveDay(timesheetId) {
+        async function approveDay(id, btn) {
+            btnLoading(btn, true);
+            const item = document.getElementById(`appr-${id}`);
+            item.style.opacity = '0.4';
             try {
-                const response = await fetch(`${API_URL}/api/manager/approve/${timesheetId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-
-                if (response.ok) {
-                    alert('Day approved successfully');
-                    loadApprovals();
-                    loadOverview();
-                }
-            } catch (err) {
-                alert(err.message);
-            }
+                const res = await apiFetch(`/api/manager/approve/${id}`, { method: 'POST' });
+                if (res.ok) { item.remove(); toast('Zi aprobată!'); }
+                else { item.style.opacity = '1'; toast('Eroare la aprobare.', 'error'); btnLoading(btn, false); }
+            } catch { item.style.opacity = '1'; toast('Eroare.', 'error'); btnLoading(btn, false); }
         }
 
-        // Reject day
-        async function rejectDay(timesheetId) {
-            const notes = prompt('Enter rejection reason:');
-            if (!notes) return;
+        async function rejectDay(id, btn) {
+            const item = document.getElementById(`appr-${id}`);
+            const existing = item.querySelector('.confirm-inline');
+            if (existing) { existing.remove(); return; }
+            const box = document.createElement('div');
+            box.className = 'confirm-inline';
+            box.innerHTML = `<span>Motiv respingere:</span><input id="rej-${id}" type="text" placeholder="scrie motivul..." style="flex:1;padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;"><button class="confirm-yes" onclick="confirmReject('${id}',this)">Respinge</button><button class="confirm-no" onclick="this.closest('.confirm-inline').remove()">Anulează</button>`;
+            item.appendChild(box);
+            box.querySelector('input').focus();
+        }
 
+        async function confirmReject(id, btn) {
+            const notes = document.getElementById(`rej-${id}`).value.trim();
+            if (!notes) { toast('Scrie un motiv.', 'error'); return; }
+            btnLoading(btn, true);
+            const item = document.getElementById(`appr-${id}`);
+            item.style.opacity = '0.4';
             try {
-                const response = await fetch(`${API_URL}/api/manager/reject/${timesheetId}`, {
+                const res = await apiFetch(`/api/manager/reject/${id}`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Content-Type': 'application/json'
-                    },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ notes })
                 });
-
-                if (response.ok) {
-                    alert('Day rejected');
-                    loadApprovals();
-                    loadOverview();
-                }
-            } catch (err) {
-                alert(err.message);
-            }
+                if (res.ok) { item.remove(); toast('Zi respinsă.'); }
+                else { item.style.opacity = '1'; toast('Eroare.', 'error'); btnLoading(btn, false); }
+            } catch { item.style.opacity = '1'; toast('Eroare.', 'error'); btnLoading(btn, false); }
         }
 
-        // Load employees
         async function loadEmployees() {
+            document.getElementById('employeesList').innerHTML = '<p style="color:#999;">Se încarcă...</p>';
             try {
-                const t = token || localStorage.getItem('managerToken');
-                const response = await fetch(`${API_URL}/api/admin/employees`, {
-                    headers: { 'Authorization': `Bearer ${t}` }
-                });
-                const data = await response.json();
-
-                const html = data.employees?.map(e => `
-                    <div class="employee-item" id="emp-${e._id}">
-                        <span style="font-weight:500;">${e.name}</span>
-                        <span style="color:#666;font-size:12px;">${e.email}</span>
-                        <span style="background:#d4edda;color:#155724;padding:4px 8px;border-radius:4px;font-size:11px;">Activ</span>
-                        <span></span>
-                        <button onclick="deleteEmployee('${e._id}','${e.name}')" style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">🗑 Sterge</button>
-                    </div>
-                `).join('') || '<p style="color:#999;">Niciun angajat.</p>';
-
-                document.getElementById('employeesList').innerHTML = html;
-            } catch (err) {
-                console.error(err);
-            }
+                const res = await apiFetch('/api/admin/employees');
+                const data = await res.json();
+                employeesCache = data.employees || [];
+                renderEmployeesList();
+            } catch { document.getElementById('employeesList').innerHTML = '<p style="color:#999;">Eroare.</p>'; }
         }
 
-        // Delete employee
-        async function deleteEmployee(id, name) {
-            if (!confirm(`Ești sigur că vrei să ștergi angajatul "${name}"? Se vor șterge și toate pontajele lui.`)) return;
-            const t = token || localStorage.getItem('managerToken');
-            try {
-                const response = await fetch(`${API_URL}/api/manager/employee/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${t}` }
-                });
-                if (response.ok) {
-                    document.getElementById(`emp-${id}`)?.remove();
-                    loadEmployeesForForms();
-                } else {
-                    alert('Eroare la ștergere.');
-                }
-            } catch (err) {
-                alert('Eroare: ' + err.message);
-            }
+        function renderEmployeesList() {
+            const html = employeesCache.map(e => `
+                <div class="employee-item" id="emp-${e._id}">
+                    <span style="font-weight:500;">${e.name}</span>
+                    <span style="color:#666;font-size:12px;">${e.email}</span>
+                    <span style="background:#d4edda;color:#155724;padding:4px 8px;border-radius:4px;font-size:11px;">Activ</span>
+                    <span></span>
+                    <button id="delbtn-${e._id}" onclick="deleteEmployee('${e._id}','${e.name.replace(/'/g,"\\'")}',this)" style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">🗑 Sterge</button>
+                </div>
+                <div id="confirm-del-${e._id}" style="display:none;" class="confirm-inline">
+                    <span>Ștergi <strong>${e.name}</strong> și toate pontajele?</span>
+                    <button class="confirm-yes" onclick="confirmDelete('${e._id}',this)">Da, șterge</button>
+                    <button class="confirm-no" onclick="cancelDelete('${e._id}')">Anulează</button>
+                </div>
+            `).join('') || '<p style="color:#999;">Niciun angajat.</p>';
+            document.getElementById('employeesList').innerHTML = html;
         }
 
-        // Load reports
+        function deleteEmployee(id, name, btn) {
+            document.getElementById(`confirm-del-${id}`).style.display = 'flex';
+            btn.style.display = 'none';
+        }
+        function cancelDelete(id) {
+            document.getElementById(`confirm-del-${id}`).style.display = 'none';
+            document.getElementById(`delbtn-${id}`).style.display = '';
+        }
+        async function confirmDelete(id, btn) {
+            btnLoading(btn, true);
+            const row = document.getElementById(`emp-${id}`);
+            row.style.opacity = '0.4';
+            try {
+                const res = await apiFetch(`/api/manager/employee/${id}`, { method: 'DELETE' });
+                if (res.ok) {
+                    row.remove();
+                    document.getElementById(`confirm-del-${id}`)?.remove();
+                    employeesCache = employeesCache.filter(e => e._id !== id);
+                    refreshDropdowns();
+                    toast('Angajat șters.');
+                } else { row.style.opacity = '1'; cancelDelete(id); toast('Eroare la ștergere.', 'error'); btnLoading(btn, false); }
+            } catch { row.style.opacity = '1'; cancelDelete(id); toast('Eroare.', 'error'); btnLoading(btn, false); }
+        }
+
         async function loadReports() {
+            document.getElementById('reportContent').innerHTML = '<p style="color:#999;">Se încarcă...</p>';
             try {
-                const response = await fetch(`${API_URL}/api/manager/team-timesheets`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-
-                let totalHours = 0;
-                let approved = 0;
-                data.timesheets?.forEach(t => {
-                    totalHours += t.totalHours || 0;
-                    if (t.status === 'approved') approved++;
-                });
-
-                const html = `
-                    <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px; margin-bottom: 20px;">
-                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center;">
-                            <div style="font-size: 12px; color: #666;">Total Ore Lucrate</div>
-                            <div style="font-size: 28px; font-weight: bold; margin-top: 8px;">${totalHours.toFixed(1)}h</div>
+                const res = await apiFetch('/api/manager/team-timesheets');
+                const data = await res.json();
+                let totalHours = 0, approved = 0;
+                data.timesheets?.forEach(t => { totalHours += t.totalHours || 0; if (t.status === 'approved') approved++; });
+                document.getElementById('reportContent').innerHTML = `
+                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;">
+                        <div style="background:#f9f9f9;padding:15px;border-radius:6px;text-align:center;">
+                            <div style="font-size:12px;color:#666;">Total Ore Lucrate</div>
+                            <div style="font-size:28px;font-weight:bold;margin-top:8px;">${totalHours.toFixed(1)}h</div>
                         </div>
-                        <div style="background: #f9f9f9; padding: 15px; border-radius: 6px; text-align: center;">
-                            <div style="font-size: 12px; color: #666;">Zile Aprobate</div>
-                            <div style="font-size: 28px; font-weight: bold; margin-top: 8px;">${approved}</div>
+                        <div style="background:#f9f9f9;padding:15px;border-radius:6px;text-align:center;">
+                            <div style="font-size:12px;color:#666;">Zile Aprobate</div>
+                            <div style="font-size:28px;font-weight:bold;margin-top:8px;">${approved}</div>
                         </div>
-                    </div>
-                `;
-
-                document.getElementById('reportContent').innerHTML = html;
-            } catch (err) {
-                console.error(err);
-            }
+                    </div>`;
+            } catch { document.getElementById('reportContent').innerHTML = '<p style="color:#999;">Eroare.</p>'; }
         }
 
-        // Load employees for dropdowns
+        function refreshDropdowns() {
+            const sel = document.getElementById('addDayEmployee');
+            sel.innerHTML = '<option value="">-- Selecteaza angajat --</option>' +
+                employeesCache.map(e => `<option value="${e._id}">${e.name} (${e.email})</option>`).join('');
+            const list = document.getElementById('employeesListCreate');
+            list.innerHTML = employeesCache.length === 0
+                ? '<p style="color:#999;">Niciun angajat creat încă.</p>'
+                : employeesCache.map(e => `
+                    <div style="padding:10px;background:#f9f9f9;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+                        <div><strong>${e.name}</strong><span style="color:#666;font-size:13px;margin-left:10px;">${e.email}</span></div>
+                        <span style="background:#d4edda;color:#155724;padding:3px 8px;border-radius:4px;font-size:11px;">Angajat</span>
+                    </div>`).join('');
+        }
+
         async function loadEmployeesForForms() {
             try {
-                const response = await fetch(`${API_URL}/api/admin/employees`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
-                });
-                const data = await response.json();
-                const employees = data.employees || [];
-
-                // Populate dropdown for add day
-                const sel = document.getElementById('addDayEmployee');
-                sel.innerHTML = '<option value="">-- Selecteaza angajat --</option>' +
-                    employees.map(e => `<option value="${e._id}">${e.name} (${e.email})</option>`).join('');
-
-                // List in create user tab
-                const list = document.getElementById('employeesListCreate');
-                if (employees.length === 0) {
-                    list.innerHTML = '<p style="color:#999;">Niciun angajat creat încă.</p>';
-                } else {
-                    list.innerHTML = employees.map(e => `
-                        <div style="padding:10px;background:#f9f9f9;border-radius:6px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                            <div>
-                                <strong>${e.name}</strong>
-                                <span style="color:#666;font-size:13px;margin-left:10px;">${e.email}</span>
-                            </div>
-                            <span style="background:#d4edda;color:#155724;padding:3px 8px;border-radius:4px;font-size:11px;">Angajat</span>
-                        </div>
-                    `).join('');
-                }
-            } catch (err) {
-                console.error(err);
-            }
+                const res = await apiFetch('/api/admin/employees');
+                const data = await res.json();
+                employeesCache = data.employees || [];
+                refreshDropdowns();
+            } catch { console.error('loadEmployeesForForms failed'); }
         }
 
-        // Create employee
         async function createEmployee(event) {
             event.preventDefault();
+            const btn = event.target.querySelector('button[type=submit]');
             const name = document.getElementById('newName').value;
             const email = document.getElementById('newEmail').value;
             const password = document.getElementById('newPassword').value;
             const msgEl = document.getElementById('createUserMsg');
-            const t = token || localStorage.getItem('managerToken');
-
+            btnLoading(btn, true);
             try {
-                const response = await fetch(`${API_URL}/api/manager/create-employee`, {
+                const res = await apiFetch('/api/manager/create-employee', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${t}`, 'Content-Type': 'application/json' },
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name, email, password })
                 });
-                const data = await response.json();
-                if (response.ok) {
-                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat pentru ${name}! Email de bun venit trimis.</div>`;
+                const data = await res.json();
+                if (res.ok) {
+                    toast(`Cont creat pentru ${name}!`);
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat! Email trimis la ${email}.</div>`;
                     document.getElementById('newName').value = '';
                     document.getElementById('newEmail').value = '';
                     document.getElementById('newPassword').value = '';
-                    loadEmployeesForForms();
+                    await loadEmployeesForForms();
                 } else {
+                    toast(data.error || 'Eroare.', 'error');
                     msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
                 }
             } catch (err) {
-                msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ Eroare: ${err.message}</div>`;
-            }
+                toast('Eroare: ' + err.message, 'error');
+            } finally { btnLoading(btn, false); }
         }
 
-        // Add work day
         async function addWorkDay(event) {
             event.preventDefault();
-            const employeeId = document.getElementById('addDayEmployee').value;
-            const date = document.getElementById('addDayDate').value;
-            const checkIn = document.getElementById('addDayCheckIn').value;
-            const checkOut = document.getElementById('addDayCheckOut').value;
-            const notes = document.getElementById('addDayNotes').value;
+            const btn = event.target.querySelector('button[type=submit]');
             const msgEl = document.getElementById('addDayMsg');
-
+            btnLoading(btn, true);
             try {
-                const response = await fetch(`${API_URL}/api/manager/add-timesheet`, {
+                const res = await apiFetch('/api/manager/add-timesheet', {
                     method: 'POST',
-                    headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ employeeId, date, checkIn, checkOut, notes })
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employeeId: document.getElementById('addDayEmployee').value,
+                        date: document.getElementById('addDayDate').value,
+                        checkIn: document.getElementById('addDayCheckIn').value,
+                        checkOut: document.getElementById('addDayCheckOut').value,
+                        notes: document.getElementById('addDayNotes').value
+                    })
                 });
-                const data = await response.json();
-                if (response.ok) {
-                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Zi adăugată și aprobată! Angajatul a fost notificat.</div>`;
+                const data = await res.json();
+                if (res.ok) {
+                    toast('Zi adăugată și angajatul notificat!');
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Zi adăugată și aprobată!</div>`;
                     document.getElementById('addDayDate').value = '';
                     document.getElementById('addDayCheckIn').value = '';
                     document.getElementById('addDayCheckOut').value = '';
                     document.getElementById('addDayNotes').value = '';
+                    setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
                 } else {
+                    toast(data.error || 'Eroare.', 'error');
                     msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
                 }
             } catch (err) {
-                msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ Eroare: ${err.message}</div>`;
-            }
+                toast('Eroare: ' + err.message, 'error');
+            } finally { btnLoading(btn, false); }
         }
 
-        // Initialize
         checkLogin();
-        // Load forms data after login
-        const _formsCheck = setInterval(() => {
-            if (token) {
-                loadEmployeesForForms();
-                clearInterval(_formsCheck);
-            }
-        }, 500);
     </script>
 </body>
 </html>

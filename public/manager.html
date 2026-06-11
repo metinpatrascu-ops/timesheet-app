@@ -125,6 +125,13 @@
                         <p style="color: #999;">Loading...</p>
                     </div>
                 </div>
+
+                <div class="card">
+                    <h2>Zile Adăugate Recent</h2>
+                    <div id="recentTimesheets">
+                        <p style="color: #999;">Loading...</p>
+                    </div>
+                </div>
             </div>
 
             <!-- APPROVALS TAB -->
@@ -329,26 +336,61 @@
 
         async function loadOverview() {
             try {
-                const [appRes, empRes] = await Promise.all([
+                const [appRes, empRes, tsRes] = await Promise.all([
                     apiFetch('/api/manager/pending-approvals'),
-                    apiFetch('/api/admin/employees')
+                    apiFetch('/api/admin/employees'),
+                    apiFetch('/api/manager/team-timesheets')
                 ]);
-                const [appData, empData] = await Promise.all([appRes.json(), empRes.json()]);
+                const [appData, empData, tsData] = await Promise.all([appRes.json(), empRes.json(), tsRes.json()]);
                 employeesCache = empData.employees || [];
+                const allTimesheets = tsData.timesheets || [];
 
                 document.getElementById('totalEmployees').textContent = employeesCache.length;
-                document.getElementById('approvalsToday').textContent = appData.timesheets?.filter(t => !t.checkOut).length || 0;
+                document.getElementById('approvalsToday').textContent = appData.timesheets?.length || 0;
+
+                const activeNow = allTimesheets.filter(t => t.checkIn && !t.checkOut).length;
+                document.getElementById('workingNow').textContent = activeNow;
+
+                const totalHoursToday = allTimesheets
+                    .filter(t => new Date(t.date).toDateString() === new Date().toDateString())
+                    .reduce((sum, t) => sum + (t.totalHours || 0), 0);
+                document.getElementById('totalHoursToday').textContent = totalHoursToday.toFixed(1) + 'h';
 
                 const teamHtml = appData.timesheets?.slice(0, 5).map(t => `
                     <div class="employee-item">
                         <span style="font-weight:500;">${t.userId.name}</span>
-                        <span style="background:#d4edda;color:#155724;padding:4px 8px;border-radius:4px;font-size:12px;">${t.checkOut ? 'Complet' : 'In lucru'}</span>
+                        <span style="background:#fff3cd;color:#856404;padding:4px 8px;border-radius:4px;font-size:12px;">În așteptare</span>
                         <span>${t.totalHours || 0}h</span>
                         <span style="color:#666;font-size:12px;">${new Date(t.date).toLocaleDateString('ro-RO')}</span>
                         <span></span>
                     </div>
-                `).join('') || '<p style="color:#999;">Nicio activitate.</p>';
+                `).join('') || '<p style="color:#999;">Nicio aprobare în așteptare.</p>';
                 document.getElementById('teamStatus').innerHTML = teamHtml;
+
+                // Zile adăugate recent (ultimele 20, sortate descrescător)
+                const sorted = [...allTimesheets].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 20);
+                if (sorted.length === 0) {
+                    document.getElementById('recentTimesheets').innerHTML = '<p style="color:#999;">Nicio zi adăugată încă.</p>';
+                } else {
+                    document.getElementById('recentTimesheets').innerHTML = `
+                        <div style="display:grid;grid-template-columns:160px 1fr 70px 80px 100px;gap:10px;padding:8px 12px;font-size:12px;font-weight:600;color:#999;border-bottom:1px solid #eee;margin-bottom:6px;">
+                            <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Status</span>
+                        </div>
+                        ${sorted.map(t => {
+                            const statusColor = t.status === 'approved' ? '#d4edda;color:#155724' : t.status === 'rejected' ? '#f8d7da;color:#721c24' : '#fff3cd;color:#856404';
+                            const statusLabel = t.status === 'approved' ? 'Aprobat' : t.status === 'rejected' ? 'Respins' : 'În așteptare';
+                            const cin = t.checkIn ? new Date(t.checkIn).toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'}) : '-';
+                            const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO', {hour:'2-digit',minute:'2-digit'}) : '-';
+                            return `<div style="display:grid;grid-template-columns:160px 1fr 70px 80px 100px;gap:10px;align-items:center;padding:10px 12px;background:#f9f9f9;border-radius:6px;margin-bottom:6px;font-size:13px;">
+                                <span style="font-weight:500;">${t.userId?.name || 'N/A'}</span>
+                                <span>${new Date(t.date).toLocaleDateString('ro-RO', {weekday:'short',day:'numeric',month:'short',year:'numeric'})}</span>
+                                <span>${cin}</span>
+                                <span>${cout}</span>
+                                <span style="background:${statusColor};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;">${statusLabel}</span>
+                            </div>`;
+                        }).join('')}
+                    `;
+                }
             } catch (err) { console.error(err); }
         }
 

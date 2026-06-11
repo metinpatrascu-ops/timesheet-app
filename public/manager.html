@@ -434,27 +434,45 @@
         // Load employees
         async function loadEmployees() {
             try {
+                const t = token || localStorage.getItem('managerToken');
                 const response = await fetch(`${API_URL}/api/admin/employees`, {
-                    headers: { 'Authorization': `Bearer ${token}` }
+                    headers: { 'Authorization': `Bearer ${t}` }
                 });
                 const data = await response.json();
 
                 const html = data.employees?.map(e => `
-                    <div class="employee-item">
-                        <span style="font-weight: 500;">${e.name}</span>
-                        <span style="color: #666; font-size: 12px;">${e.email}</span>
-                        <span style="background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 4px; font-size: 11px;">Active</span>
+                    <div class="employee-item" id="emp-${e._id}">
+                        <span style="font-weight:500;">${e.name}</span>
+                        <span style="color:#666;font-size:12px;">${e.email}</span>
+                        <span style="background:#d4edda;color:#155724;padding:4px 8px;border-radius:4px;font-size:11px;">Activ</span>
                         <span></span>
-                        <div style="display: flex; gap: 4px;">
-                            <button onclick="editEmployee('${e._id}')">Edit</button>
-                            <button onclick="deleteEmployee('${e._id}')">Delete</button>
-                        </div>
+                        <button onclick="deleteEmployee('${e._id}','${e.name}')" style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">🗑 Sterge</button>
                     </div>
-                `).join('') || '<p style="color: #999;">No employees</p>';
+                `).join('') || '<p style="color:#999;">Niciun angajat.</p>';
 
                 document.getElementById('employeesList').innerHTML = html;
             } catch (err) {
                 console.error(err);
+            }
+        }
+
+        // Delete employee
+        async function deleteEmployee(id, name) {
+            if (!confirm(`Ești sigur că vrei să ștergi angajatul "${name}"? Se vor șterge și toate pontajele lui.`)) return;
+            const t = token || localStorage.getItem('managerToken');
+            try {
+                const response = await fetch(`${API_URL}/api/manager/employee/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${t}` }
+                });
+                if (response.ok) {
+                    document.getElementById(`emp-${id}`)?.remove();
+                    loadEmployeesForForms();
+                } else {
+                    alert('Eroare la ștergere.');
+                }
+            } catch (err) {
+                alert('Eroare: ' + err.message);
             }
         }
 

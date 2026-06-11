@@ -537,14 +537,61 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
     }
     await timesheet.save();
 
-    // Add notification for employee
-    await Notification.create({
-      userId: employeeId,
-      message: `Managerul a adăugat/actualizat ziua de ${date}. Ore lucrate: ${totalHours}h. Status: Aprobat.`,
-      createdAt: new Date()
-    });
+    const employee = await User.findById(employeeId);
+    const msgText = `Managerul a adăugat/actualizat ziua de ${date}. Ore lucrate: ${totalHours}h. Status: Aprobat.`;
+
+    await Notification.create({ userId: employeeId, message: msgText });
+
+    // Send email to employee
+    if (employee) {
+      const appUrl = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+      if (process.env.GMAIL_USER && process.env.GMAIL_PASS) {
+        try {
+          await transporter.sendMail({
+            from: `"Timesheet App" <${process.env.GMAIL_USER}>`,
+            to: employee.email,
+            subject: `Program actualizat - ${date}`,
+            html: `
+              <div style="font-family:Arial,sans-serif;max-width:500px;margin:0 auto;padding:20px;">
+                <h2 style="color:#3498db;">Salut, ${employee.name}!</h2>
+                <p>Managerul tău a actualizat programul tău de lucru.</p>
+                <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:20px 0;">
+                  <p><strong>Data:</strong> ${date}</p>
+                  <p><strong>Check In:</strong> ${checkIn}</p>
+                  <p><strong>Check Out:</strong> ${checkOut}</p>
+                  <p><strong>Total ore:</strong> ${totalHours}h</p>
+                  <p><strong>Status:</strong> ✅ Aprobat</p>
+                  ${notes ? `<p><strong>Note:</strong> ${notes}</p>` : ''}
+                </div>
+                <a href="${appUrl}" style="background:#27ae60;color:white;padding:12px 24px;border-radius:6px;text-decoration:none;display:inline-block;">
+                  Vezi în aplicație
+                </a>
+              </div>
+            `
+          });
+        } catch (emailErr) {
+          console.error('Email error:', emailErr.message);
+        }
+      }
+    }
 
     res.json({ message: 'Timesheet added', timesheet });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Delete employee
+app.delete('/api/manager/employee/:id', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    await User.findByIdAndDelete(req.params.id);
+    await Timesheet.deleteMany({ userId: req.params.id });
+    await Notification.deleteMany({ userId: req.params.id });
+    res.json({ message: 'Employee deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

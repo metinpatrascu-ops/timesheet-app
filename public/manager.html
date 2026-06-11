@@ -586,15 +586,15 @@
             }
         }
 
-        // Override showApp to also load forms
-        const _origShowApp = showApp;
-        function showApp() {
-            _origShowApp();
-            loadEmployeesForForms();
-        }
-
         // Initialize
         checkLogin();
+        // Load forms data after login
+        const _formsCheck = setInterval(() => {
+            if (token) {
+                loadEmployeesForForms();
+                clearInterval(_formsCheck);
+            }
+        }, 500);
     </script>
 </body>
 </html>

@@ -498,17 +498,18 @@ app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
     if (user.role !== 'manager' && user.role !== 'admin') {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    const { email, password, name } = req.body;
+    const { email, password, name, role } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password and name required' });
     }
+    const newRole = (role === 'manager') ? 'manager' : 'employee';
     const existing = await User.findOne({ email });
     if (existing) return res.status(400).json({ error: 'Email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword, name, role: 'employee' });
+    const newUser = new User({ email, password: hashedPassword, name, role: newRole });
     await newUser.save();
-    res.json({ message: 'Employee created', user: { id: newUser._id, email: newUser.email, name: newUser.name } });
+    res.json({ message: 'User created', user: { id: newUser._id, email: newUser.email, name: newUser.name, role: newUser.role } });
     sendWelcomeEmail(email, name, password);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -699,7 +700,12 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   }
 });
 
+app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  // Keep-alive: ping self every 14 min to prevent Render free tier sleep
+  const SELF = process.env.APP_URL || 'https://timesheet-app-qbdt.onrender.com';
+  setInterval(() => { fetch(`${SELF}/api/health`).catch(() => {}); }, 14 * 60 * 1000);
 });

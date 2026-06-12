@@ -245,6 +245,13 @@
                             <label style="display:block;margin-bottom:5px;font-weight:500;">Parola:</label>
                             <input type="password" id="newPassword" placeholder="minim 6 caractere" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;" required minlength="6">
                         </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Rol:</label>
+                            <select id="newRole" style="width:100%;padding:10px;border:1px solid #ddd;border-radius:4px;font-size:14px;background:var(--input-bg);color:var(--text);">
+                                <option value="employee">Angajat</option>
+                                <option value="manager">Manager</option>
+                            </select>
+                        </div>
                         <button type="submit" style="padding:10px 20px;background:#3498db;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">Creeaza Cont</button>
                     </form>
                     <div style="margin-top:25px;">
@@ -622,21 +629,24 @@
             const name = document.getElementById('newName').value;
             const email = document.getElementById('newEmail').value;
             const password = document.getElementById('newPassword').value;
+            const role = document.getElementById('newRole').value;
             const msgEl = document.getElementById('createUserMsg');
             btnLoading(btn, true);
             try {
                 const res = await apiFetch('/api/manager/create-employee', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, email, password })
+                    body: JSON.stringify({ name, email, password, role })
                 });
                 const data = await res.json();
                 if (res.ok) {
-                    toast(`Cont creat pentru ${name}!`);
-                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont creat! Email trimis la ${email}.</div>`;
+                    const roleLabel = role === 'manager' ? 'Manager' : 'Angajat';
+                    toast(`Cont ${roleLabel} creat pentru ${name}!`);
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Cont ${roleLabel} creat! Email trimis la ${email}.</div>`;
                     document.getElementById('newName').value = '';
                     document.getElementById('newEmail').value = '';
                     document.getElementById('newPassword').value = '';
+                    document.getElementById('newRole').value = 'employee';
                     await loadEmployeesForForms();
                 } else {
                     toast(data.error || 'Eroare.', 'error');

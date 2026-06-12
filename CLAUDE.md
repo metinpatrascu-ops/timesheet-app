@@ -38,9 +38,11 @@ This is a single-file Node.js/Express app. All server logic — Mongoose schemas
 
 **Frontend:**
 - [`public/index.html`](public/index.html) — employee app (check-in/out, breaks, calendar, approval status)
-- [`public/manager.html`](public/manager.html) — manager dashboard (approvals, team stats, employee list)
+- [`public/manager.html`](public/manager.html) — manager dashboard (approvals, team stats, employee list, leaves, Excel import)
 
 Both pages call the API directly with `fetch`, storing the JWT in `localStorage`.
+
+**PWA:** both pages are installable as standalone apps. Two manifests — `public/manifest.json` (employee app, start_url `/`) and `public/manifest-manager.json` (manager app, start_url `/manager.html`) — share icons (`icon-192.png`, `icon-512.png`, `icon-512-maskable.png`, `apple-touch-icon.png`) and one service worker (`public/sw.js`: network-first with cache fallback for static files, `/api/` never intercepted).
 
 **Environment (`.env`):**
 ```

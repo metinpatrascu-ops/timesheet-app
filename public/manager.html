@@ -169,6 +169,7 @@
                 <button class="tab" onclick="switchTab(event, 'employees')"><i class="ti ti-users"></i> Angajati</button>
                 <button class="tab" onclick="switchTab(event, 'addday')"><i class="ti ti-calendar-plus"></i> Adauga Zi</button>
                 <button class="tab" onclick="switchTab(event, 'createuser')"><i class="ti ti-user-plus"></i> Creeaza Cont</button>
+                <button class="tab" onclick="switchTab(event, 'leave')"><i class="ti ti-beach"></i> Concediu</button>
                 <button class="tab" onclick="switchTab(event, 'reports')"><i class="ti ti-chart-bar"></i> Rapoarte</button>
                 <button class="tab" onclick="switchTab(event, 'import')"><i class="ti ti-upload"></i> Import Program</button>
             </div>
@@ -306,6 +307,50 @@
                 </div>
             </div>
 
+            <!-- LEAVE TAB -->
+            <div id="leave" class="tab-content">
+                <div class="card">
+                    <h2>🏖 Adaugă Concediu</h2>
+                    <div id="leaveMsg"></div>
+                    <form onsubmit="addLeave(event)" style="max-width:500px;">
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Angajat:</label>
+                            <select id="leaveEmployee" class="frm-input" required>
+                                <option value="">-- Selecteaza angajat --</option>
+                            </select>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px;">
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">De la:</label>
+                                <input type="date" id="leaveStart" class="frm-input" required>
+                            </div>
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">Până la:</label>
+                                <input type="date" id="leaveEnd" class="frm-input" required>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Tip concediu:</label>
+                            <select id="leaveType" class="frm-input">
+                                <option value="Concediu de odihnă">Concediu de odihnă</option>
+                                <option value="Concediu medical">Concediu medical</option>
+                                <option value="Concediu fără plată">Concediu fără plată</option>
+                                <option value="Zi liberă">Zi liberă</option>
+                            </select>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Note (optional):</label>
+                            <input type="text" id="leaveNotes" placeholder="ex: concediu anual" class="frm-input">
+                        </div>
+                        <button type="submit" style="padding:10px 20px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">Adaugă Concediu</button>
+                    </form>
+                </div>
+                <div class="card">
+                    <h2>Concedii Programate</h2>
+                    <div id="leavesList"><p style="color:#999;">Loading...</p></div>
+                </div>
+            </div>
+
             <!-- REPORTS TAB -->
             <div id="reports" class="tab-content">
                 <div class="card">
@@ -319,9 +364,18 @@
             <!-- IMPORT TAB -->
             <div id="import" class="tab-content">
                 <div class="card">
+                    <h2>📂 Import din Fișier Excel</h2>
+                    <p class="muted" style="font-size:13px;margin-bottom:12px;">
+                        Alege fișierul Excel (.xlsx, .xls) sau CSV direct din computerul tău.
+                        Coloanele trebuie să fie în ordinea: <code style="background:var(--item);padding:2px 6px;border-radius:3px;">Nume &nbsp; Data &nbsp; Check In &nbsp; Check Out &nbsp; Note(opțional)</code>
+                    </p>
+                    <input type="file" id="importFile" accept=".xlsx,.xls,.csv" onchange="handleImportFile(event)" class="frm-input" style="margin-bottom:8px;cursor:pointer;">
+                    <p class="muted" style="font-size:12px;">Primul rând poate fi cap de tabel (Nume, Data...) — îl detectez și îl sar automat.</p>
+                </div>
+                <div class="card">
                     <h2>Import Program în Bulk</h2>
                     <p class="muted" style="font-size:13px;margin-bottom:16px;">
-                        Lipește programul copiat din Excel, Google Sheets sau scrie direct.<br>
+                        Sau lipește programul copiat din Excel, Google Sheets sau scrie direct.<br>
                         Format acceptat pe fiecare rând: <code style="background:var(--item);padding:2px 6px;border-radius:3px;">Nume Angajat &nbsp; Data &nbsp; Check In &nbsp; Check Out &nbsp; Note(opțional)</code>
                     </p>
                     <p class="muted" style="font-size:13px;margin-bottom:12px;">
@@ -359,6 +413,7 @@
     </style>
     <div id="toast"></div>
 
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script>
         const API_URL = window.location.hostname === 'localhost' ? 'http://localhost:3000' : '';
         let currentUser = null;
@@ -455,6 +510,7 @@
             if (tabName === 'approvals') loadApprovals();
             if (tabName === 'employees') loadEmployees();
             if (tabName === 'reports') loadReports();
+            if (tabName === 'leave') loadLeaves();
         }
 
         async function apiFetch(url, opts = {}) {
@@ -464,12 +520,13 @@
 
         async function loadOverview() {
             try {
-                const [appRes, empRes, tsRes] = await Promise.all([
+                const [appRes, empRes, tsRes, lvRes] = await Promise.all([
                     apiFetch('/api/manager/pending-approvals'),
                     apiFetch('/api/admin/employees'),
-                    apiFetch('/api/manager/team-timesheets')
+                    apiFetch('/api/manager/team-timesheets'),
+                    apiFetch('/api/manager/leaves')
                 ]);
-                const [appData, empData, tsData] = await Promise.all([appRes.json(), empRes.json(), tsRes.json()]);
+                const [appData, empData, tsData, lvData] = await Promise.all([appRes.json(), empRes.json(), tsRes.json(), lvRes.json()]);
                 employeesCache = empData.employees || [];
                 const allTimesheets = tsData.timesheets || [];
 
@@ -504,7 +561,20 @@
                             <span class="c-status badge ${sb}">${sl}</span>
                         </div>`;
                     }).join('')}` : '<p style="color:#999;">Nicio activitate azi.</p>';
-                document.getElementById('teamStatus').innerHTML = teamHtml;
+
+                // Who is on leave today
+                const now = new Date(); now.setHours(0,0,0,0);
+                const onLeave = (lvData.leaves || []).filter(l => {
+                    const s = new Date(l.startDate); s.setHours(0,0,0,0);
+                    const e = new Date(l.endDate); e.setHours(23,59,59,999);
+                    return s <= now && now <= e;
+                });
+                const leaveHtml = onLeave.length > 0
+                    ? `<div style="background:#d1ecf1;color:#0c5460;padding:10px 14px;border-radius:6px;margin-bottom:12px;font-size:13px;">
+                        🏖 <strong>În concediu azi:</strong> ${onLeave.map(l => `${l.userId?.name || 'N/A'} (${l.type.toLowerCase()})`).join(', ')}
+                       </div>`
+                    : '';
+                document.getElementById('teamStatus').innerHTML = leaveHtml + teamHtml;
 
                 renderRecentTimesheets(allTimesheets);
             } catch (err) { console.error(err); }
@@ -683,9 +753,10 @@
         }
 
         function refreshDropdowns() {
-            const sel = document.getElementById('addDayEmployee');
-            sel.innerHTML = '<option value="">-- Selecteaza angajat --</option>' +
-                employeesCache.map(e => `<option value="${e._id}">${e.name} (${e.email})</option>`).join('');
+            const options = '<option value="">-- Selecteaza angajat --</option>' +
+                employeesCache.map(e => `<option value="${e._id}">${e.name}${e.position ? ' — ' + e.position : ''}</option>`).join('');
+            document.getElementById('addDayEmployee').innerHTML = options;
+            document.getElementById('leaveEmployee').innerHTML = options;
             const list = document.getElementById('employeesListCreate');
             list.innerHTML = employeesCache.length === 0
                 ? '<p style="color:#999;">Niciun angajat creat încă.</p>'
@@ -852,16 +923,117 @@
             } catch { toast('Eroare.','error'); btnLoading(btn,false); }
         }
 
+        async function addLeave(event) {
+            event.preventDefault();
+            const btn = event.target.querySelector('button[type=submit]');
+            const msgEl = document.getElementById('leaveMsg');
+            btnLoading(btn, true);
+            try {
+                const res = await apiFetch('/api/manager/leave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employeeId: document.getElementById('leaveEmployee').value,
+                        startDate: document.getElementById('leaveStart').value,
+                        endDate: document.getElementById('leaveEnd').value,
+                        type: document.getElementById('leaveType').value,
+                        notes: document.getElementById('leaveNotes').value
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    toast('Concediu adăugat! Angajatul a fost notificat.');
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Concediu salvat și angajat notificat pe email!</div>`;
+                    document.getElementById('leaveStart').value = '';
+                    document.getElementById('leaveEnd').value = '';
+                    document.getElementById('leaveNotes').value = '';
+                    setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
+                    loadLeaves();
+                } else {
+                    toast(data.error || 'Eroare.', 'error');
+                    msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
+                }
+            } catch (err) {
+                toast('Eroare: ' + err.message, 'error');
+            } finally { btnLoading(btn, false); }
+        }
+
+        async function loadLeaves() {
+            const el = document.getElementById('leavesList');
+            el.innerHTML = '<p style="color:#999;">Se încarcă...</p>';
+            try {
+                const res = await apiFetch('/api/manager/leaves');
+                const data = await res.json();
+                const leaves = data.leaves || [];
+                if (leaves.length === 0) { el.innerHTML = '<p style="color:#999;">Niciun concediu programat.</p>'; return; }
+                const today = new Date(); today.setHours(0,0,0,0);
+                el.innerHTML = leaves.map(l => {
+                    const s = new Date(l.startDate), e = new Date(l.endDate);
+                    const fmt = d => d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' });
+                    const active = s <= today && today <= new Date(e.getTime() + 24*60*60*1000 - 1);
+                    const past = e < today;
+                    const badge = active ? '<span class="badge badge-ok">🏖 În concediu acum</span>'
+                                : past ? '<span class="badge" style="background:var(--item);color:var(--text2);border:1px solid var(--border);">Încheiat</span>'
+                                : '<span class="badge badge-warn">Urmează</span>';
+                    return `
+                    <div id="leave-${l._id}" style="display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center;padding:12px;background:var(--item);border-radius:6px;margin-bottom:8px;${past ? 'opacity:0.6;' : ''}">
+                        <div style="min-width:0;">
+                            <div style="font-weight:500;">${l.userId?.name || 'N/A'} <span class="muted" style="font-size:12px;">— ${l.type}</span></div>
+                            <div class="muted" style="font-size:13px;margin-top:2px;">${fmt(s)} → ${fmt(e)}${l.notes ? ' · ' + l.notes : ''}</div>
+                        </div>
+                        <div style="display:flex;gap:8px;align-items:center;">
+                            ${badge}
+                            <button class="btn-del" onclick="deleteLeave('${l._id}',this)">🗑</button>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch { el.innerHTML = '<p style="color:#999;">Eroare la încărcare.</p>'; }
+        }
+
+        async function deleteLeave(id, btn) {
+            btnLoading(btn, true);
+            const row = document.getElementById(`leave-${id}`);
+            row.style.opacity = '0.4';
+            try {
+                const res = await apiFetch(`/api/manager/leave/${id}`, { method: 'DELETE' });
+                if (res.ok) { row.remove(); toast('Concediu anulat. Angajatul a fost notificat.'); }
+                else { row.style.opacity = '1'; toast('Eroare la anulare.', 'error'); btnLoading(btn, false); }
+            } catch { row.style.opacity = '1'; toast('Eroare.', 'error'); btnLoading(btn, false); }
+        }
+
         let importRows = [];
 
         function parseDate(str) {
-            str = str.trim();
+            str = String(str).trim();
             // YYYY-MM-DD
             if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str;
             // DD.MM.YYYY or DD/MM/YYYY
             const m = str.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/);
             if (m) return `${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`;
+            // DD.MM.YY or DD/MM/YY (Excel often shortens years)
+            const m2 = str.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2})$/);
+            if (m2) return `20${m2[3]}-${m2[2].padStart(2,'0')}-${m2[1].padStart(2,'0')}`;
+            // Excel serial number (days since 1900)
+            if (/^\d{5}$/.test(str)) {
+                const d = new Date(Date.UTC(1899, 11, 30) + parseInt(str) * 86400000);
+                if (!isNaN(d)) return d.toISOString().slice(0, 10);
+            }
             return null;
+        }
+
+        function normalizeTime(s) {
+            s = String(s).trim();
+            // Excel fraction of a day (0.375 = 09:00)
+            if (/^0?\.\d+$/.test(s)) {
+                const mins = Math.round(parseFloat(s) * 24 * 60);
+                return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+            }
+            // 9:00, 09:00, 9.00, 09:00:00
+            const m = s.match(/^(\d{1,2})[:.](\d{2})(?::\d{2})?$/);
+            if (m) return m[1].padStart(2, '0') + ':' + m[2];
+            // just the hour: 9 → 09:00
+            if (/^\d{1,2}$/.test(s)) return s.padStart(2, '0') + ':00';
+            return s;
         }
 
         function matchEmployee(name) {
@@ -879,35 +1051,73 @@
             if (!text) { document.getElementById('importPreview').innerHTML = '<p style="color:#e74c3c;">Textul e gol.</p>'; return; }
 
             const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-            importRows = [];
-
-            for (const line of lines) {
-                // Try tab, then comma+space, then semicolon, then 2+ spaces
+            const rows = lines.map(line => {
+                // Try tab, then semicolon, then comma, then 2+ spaces
                 let cols = line.includes('\t') ? line.split('\t') :
                            line.includes(';')  ? line.split(';') :
                            line.includes(',')  ? line.split(',') :
                            line.split(/\s{2,}/);
-                cols = cols.map(c => c.trim()).filter(c => c);
+                return cols.map(c => c.trim()).filter(c => c);
+            });
+            processImportRows(rows);
+        }
 
+        function handleImportFile(ev) {
+            const file = ev.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = e => {
+                try {
+                    const wb = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                    const sheet = wb.Sheets[wb.SheetNames[0]];
+                    const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: '' })
+                        .map(r => r.map(c => String(c).trim()).filter(c => c !== ''))
+                        .filter(r => r.length > 0);
+                    if (rows.length === 0) { toast('Fișierul e gol.', 'error'); return; }
+                    processImportRows(rows);
+                    toast(`Fișier citit: ${file.name}`);
+                    document.getElementById('importPreview').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                } catch (err) {
+                    toast('Nu am putut citi fișierul: ' + err.message, 'error');
+                }
+                ev.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        }
+
+        function processImportRows(rows) {
+            importRows = [];
+            rows = rows.filter(r => r.length > 0);
+            // skip header row (e.g. "Nume | Data | Check In | Check Out")
+            if (rows.length && !parseDate(rows[0][1] || '') && /nume|angajat|data|check/i.test(rows[0].join(' '))) {
+                rows = rows.slice(1);
+            }
+
+            for (const cols of rows) {
+                const line = cols.join('  ');
                 if (cols.length < 4) {
                     importRows.push({ raw: line, error: 'Format invalid — trebuie minim 4 coloane: Nume, Data, Check In, Check Out' });
                     continue;
                 }
 
-                const [nameRaw, dateRaw, checkIn, checkOut, ...noteParts] = cols;
+                const [nameRaw, dateRaw, checkInRaw, checkOutRaw, ...noteParts] = cols;
                 const date = parseDate(dateRaw);
                 const employee = matchEmployee(nameRaw);
+                const checkIn = normalizeTime(checkInRaw);
+                const checkOut = normalizeTime(checkOutRaw);
+                const timesOk = /^\d{2}:\d{2}$/.test(checkIn) && /^\d{2}:\d{2}$/.test(checkOut);
 
                 importRows.push({
                     raw: line,
                     nameRaw,
                     date,
-                    checkIn: checkIn.trim(),
-                    checkOut: checkOut.trim(),
+                    checkIn,
+                    checkOut,
                     notes: noteParts.join(' ').trim(),
                     employee,
                     error: !date ? `Data "${dateRaw}" nu e recunoscută` :
-                           !employee ? `Angajatul "${nameRaw}" nu a fost găsit` : null
+                           !employee ? `Angajatul "${nameRaw}" nu a fost găsit` :
+                           !timesOk ? `Orele "${checkInRaw}" / "${checkOutRaw}" nu sunt valide` : null
                 });
             }
 

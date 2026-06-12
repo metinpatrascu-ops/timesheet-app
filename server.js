@@ -107,9 +107,19 @@ const notificationSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const leaveSchema = new mongoose.Schema({
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  startDate: { type: Date, required: true },
+  endDate: { type: Date, required: true },
+  type: { type: String, default: 'Concediu de odihnă' },
+  notes: String,
+  createdAt: { type: Date, default: Date.now }
+});
+
 const User = mongoose.model('User', userSchema);
 const Timesheet = mongoose.model('Timesheet', timesheetSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
+const Leave = mongoose.model('Leave', leaveSchema);
 
 // Helper function to generate JWT
 const generateToken = (userId) => {
@@ -592,6 +602,81 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
   }
 });
 
+// Manager: Add leave (concediu) for an employee
+app.post('/api/manager/leave', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const { employeeId, startDate, endDate, type, notes } = req.body;
+    if (!employeeId || !startDate || !endDate) {
+      return res.status(400).json({ error: 'employeeId, startDate, endDate required' });
+    }
+    if (new Date(endDate) < new Date(startDate)) {
+      return res.status(400).json({ error: 'Data de sfârșit nu poate fi înainte de data de început' });
+    }
+    const leave = await Leave.create({
+      userId: employeeId,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      type: type || 'Concediu de odihnă',
+      notes: notes || ''
+    });
+    res.json({ message: 'Leave created', leave });
+
+    const employee = await User.findById(employeeId);
+    if (employee) {
+      const s = new Date(startDate).toLocaleDateString('ro-RO');
+      const e = new Date(endDate).toLocaleDateString('ro-RO');
+      Notification.create({ userId: employee._id, message: `🏖 Concediu programat: ${s} – ${e} (${leave.type})` }).catch(() => {});
+      sendNotifEmail(employee.email, employee.name, `Concediu programat — ${s} – ${e}`,
+        `<p>Managerul ți-a programat <strong>${leave.type.toLowerCase()}</strong> în perioada:</p>
+         <p style="font-size:18px;font-weight:bold;">${s} – ${e}</p>
+         ${notes ? `<p>Note: <em>${notes}</em></p>` : ''}`
+      );
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: List leaves
+app.get('/api/manager/leaves', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const leaves = await Leave.find().populate('userId', 'name email position').sort({ startDate: -1 });
+    res.json({ leaves });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Delete leave
+app.delete('/api/manager/leave/:id', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const leave = await Leave.findByIdAndDelete(req.params.id);
+    if (!leave) return res.status(404).json({ error: 'Leave not found' });
+    res.json({ message: 'Leave deleted' });
+
+    const employee = await User.findById(leave.userId);
+    if (employee) {
+      const s = new Date(leave.startDate).toLocaleDateString('ro-RO');
+      const e = new Date(leave.endDate).toLocaleDateString('ro-RO');
+      Notification.create({ userId: employee._id, message: `Concediul din perioada ${s} – ${e} a fost anulat de manager.` }).catch(() => {});
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Manager: Update employee (name, position)
 app.put('/api/manager/employee/:id', verifyToken, async (req, res) => {
   try {
@@ -620,6 +705,7 @@ app.delete('/api/manager/employee/:id', verifyToken, async (req, res) => {
     await User.findByIdAndDelete(req.params.id);
     await Timesheet.deleteMany({ userId: req.params.id });
     await Notification.deleteMany({ userId: req.params.id });
+    await Leave.deleteMany({ userId: req.params.id });
     res.json({ message: 'Employee deleted' });
   } catch (err) {
     res.status(500).json({ error: err.message });

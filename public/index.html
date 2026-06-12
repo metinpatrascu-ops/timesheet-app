@@ -2,7 +2,8 @@
 <html lang="ro">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f1117">
     <title>Timesheet - Employee App</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/tabler-icons/2.44.0/tabler-icons.min.css">
     <style>
@@ -17,6 +18,7 @@
             --input-bg: #252535; --input-border: #444455;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { overflow-x: hidden; }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: var(--bg); color: var(--text); transition: background 0.2s, color 0.2s; }
         
         .container { max-width: 900px; margin: 0 auto; padding: 20px; }
@@ -79,15 +81,27 @@
         #notifBell { position: fixed; bottom: 24px; right: 24px; z-index: 999; }
         #notifBtn { background: #3498db; color: white; border: none; border-radius: 50%; width: 52px; height: 52px; font-size: 22px; cursor: pointer; box-shadow: 0 4px 12px rgba(0,0,0,0.2); position: relative; }
         #notifCount { position: absolute; top: -4px; right: -4px; background: #e74c3c; color: white; border-radius: 50%; width: 20px; height: 20px; font-size: 11px; display: flex; align-items: center; justify-content: center; font-weight: bold; }
-        #notifPanel { position: fixed; bottom: 90px; right: 24px; width: 320px; background: white; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.15); display: none; z-index: 998; max-height: 400px; overflow-y: auto; }
+        #notifPanel { position: fixed; bottom: 90px; right: 24px; width: 320px; background: var(--card); border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.3); display: none; z-index: 998; max-height: 400px; overflow-y: auto; }
         #notifPanel.open { display: block; }
-        .notif-item { padding: 12px 15px; border-bottom: 1px solid #eee; font-size: 13px; }
-        .notif-item.unread { background: #f0f8ff; border-left: 3px solid #3498db; }
+        .notif-item { padding: 12px 15px; border-bottom: 1px solid var(--border); font-size: 13px; }
+        .notif-item.unread { background: var(--item); border-left: 3px solid #3498db; }
         .notif-time { font-size: 11px; color: #999; margin-top: 4px; }
         
-        .loading { text-align: center; color: #666; padding: 20px; }
+        .loading { text-align: center; color: var(--text2); padding: 20px; }
         .spinner { display: inline-block; width: 20px; height: 20px; border: 3px solid #f3f3f3; border-top: 3px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        .trow-head { display: grid; gap: 8px; padding: 6px 10px; font-size: 11px; font-weight: 600; color: var(--text2); border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+        .trow { display: grid; gap: 8px; align-items: center; padding: 10px; background: var(--item); border-radius: 6px; margin-bottom: 4px; font-size: 13px; }
+        .trow span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .cols-month { grid-template-columns: 1.5fr 0.9fr 0.9fr 0.6fr 1fr; }
+        .badge { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-align: center; }
+        .badge-ok { background: #d4edda; color: #155724; }
+        .badge-warn { background: #fff3cd; color: #856404; }
+        .badge-err { background: #f8d7da; color: #721c24; }
+        .summary-box { background: var(--item); padding: 12px; border-radius: 6px; text-align: center; }
+        .summary-label { font-size: 11px; color: var(--text2); }
+        .summary-value { font-size: 26px; font-weight: bold; margin-top: 4px; }
 
         @media (max-width: 600px) {
             .container { padding: 10px; }
@@ -109,6 +123,13 @@
             button { padding: 10px 12px; font-size: 13px; }
             #notifPanel { width: calc(100vw - 24px); right: 12px; bottom: 80px; }
             .login-container { margin: 20px auto; padding: 20px; }
+            input, select, textarea { font-size: 16px !important; }
+            .trow, .trow-head { gap: 6px; }
+            .trow { padding: 8px; font-size: 12px; }
+            .cols-month { grid-template-columns: 1.3fr 0.75fr 0.75fr 0.5fr 1fr; }
+            .badge { font-size: 10px; padding: 2px 5px; }
+            .summary-value { font-size: 20px; }
+            #monthSummary { gap: 8px !important; }
         }
     </style>
 </head>
@@ -161,7 +182,7 @@
         </button>
     </div>
     <div id="notifPanel">
-        <div style="padding:12px 15px;font-weight:600;border-bottom:1px solid #eee;display:flex;justify-content:space-between;align-items:center;">
+        <div style="padding:12px 15px;font-weight:600;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">
             Notificari
             <button onclick="markAllRead()" style="font-size:11px;background:#3498db;color:white;border:none;padding:3px 8px;border-radius:4px;cursor:pointer;">Toate citite</button>
         </div>
@@ -241,7 +262,7 @@
             <div id="breaks" class="tab-content">
                 <div class="card">
                     <h2>Gestionare Pauze</h2>
-                    <p style="color: #666; margin-bottom: 15px;">Pauza zilei: 1 ora (12:00 - 13:00)</p>
+                    <p style="color: var(--text2); margin-bottom: 15px;">Pauza zilei: 1 ora (12:00 - 13:00)</p>
                     
                     <div class="button-group">
                         <button class="btn-primary" id="startBreakBtn" onclick="startBreak()"><i class="ti ti-coffee"></i> Incepe Pauza</button>
@@ -737,17 +758,17 @@
                 const pending = monthly.filter(t => t.status === 'pending').length;
 
                 document.getElementById('monthSummary').innerHTML = `
-                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
-                        <div style="font-size:11px;color:#666;">Zile lucrate</div>
-                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${monthly.length}</div>
+                    <div class="summary-box">
+                        <div class="summary-label">Zile lucrate</div>
+                        <div class="summary-value">${monthly.length}</div>
                     </div>
-                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
-                        <div style="font-size:11px;color:#666;">Total ore</div>
-                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${totalHours.toFixed(1)}h</div>
+                    <div class="summary-box">
+                        <div class="summary-label">Total ore</div>
+                        <div class="summary-value">${totalHours.toFixed(1)}h</div>
                     </div>
-                    <div style="background:#f9f9f9;padding:12px;border-radius:6px;text-align:center;">
-                        <div style="font-size:11px;color:#666;">Aprobate / Așteptare</div>
-                        <div style="font-size:26px;font-weight:bold;margin-top:4px;">${approved} / ${pending}</div>
+                    <div class="summary-box">
+                        <div class="summary-label">Aprobate / Așteptare</div>
+                        <div class="summary-value">${approved} / ${pending}</div>
                     </div>`;
 
                 if (monthly.length === 0) {
@@ -756,20 +777,20 @@
                 }
 
                 document.getElementById('monthList').innerHTML = `
-                    <div style="display:grid;grid-template-columns:120px 70px 80px 50px 90px;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:#999;border-bottom:1px solid #eee;margin-bottom:4px;">
+                    <div class="trow-head cols-month">
                         <span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span>
                     </div>
                     ${monthly.map(t => {
                         const cin = t.checkIn ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
                         const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '--:--';
-                        const sc = t.status==='approved' ? '#d4edda;color:#155724' : t.status==='rejected' ? '#f8d7da;color:#721c24' : '#fff3cd;color:#856404';
+                        const sb = t.status==='approved' ? 'badge-ok' : t.status==='rejected' ? 'badge-err' : 'badge-warn';
                         const sl = t.status==='approved' ? 'Aprobat' : t.status==='rejected' ? 'Respins' : 'Așteptare';
-                        return `<div style="display:grid;grid-template-columns:120px 70px 80px 50px 90px;gap:8px;align-items:center;padding:10px;background:#f9f9f9;border-radius:6px;margin-bottom:4px;font-size:13px;">
+                        return `<div class="trow cols-month">
                             <span style="font-weight:500;">${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
                             <span>${cin}</span>
                             <span>${cout}</span>
                             <span style="font-weight:600;">${t.totalHours||0}h</span>
-                            <span style="background:${sc};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;">${sl}</span>
+                            <span class="badge ${sb}">${sl}</span>
                         </div>`;
                     }).join('')}`;
             } catch (err) {

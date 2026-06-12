@@ -77,6 +77,7 @@ const userSchema = new mongoose.Schema({
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
   name: String,
+  position: String,
   role: { type: String, enum: ['employee', 'manager', 'admin'], default: 'employee' },
   createdAt: { type: Date, default: Date.now }
 });
@@ -158,7 +159,7 @@ app.post('/api/auth/register', async (req, res) => {
     res.json({
       message: 'User registered successfully',
       token,
-      user: { id: user._id, email: user.email, name: user.name, role: user.role }
+      user: { id: user._id, email: user.email, name: user.name, position: user.position, role: user.role }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -189,7 +190,7 @@ app.post('/api/auth/login', async (req, res) => {
     res.json({
       message: 'Login successful',
       token,
-      user: { id: user._id, email: user.email, name: user.name, role: user.role }
+      user: { id: user._id, email: user.email, name: user.name, position: user.position, role: user.role }
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -200,7 +201,7 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
-    res.json({ user: { id: user._id, email: user.email, name: user.name, role: user.role } });
+    res.json({ user: { id: user._id, email: user.email, name: user.name, position: user.position, role: user.role } });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -498,7 +499,7 @@ app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
     if (user.role !== 'manager' && user.role !== 'admin') {
       return res.status(403).json({ error: 'Unauthorized' });
     }
-    const { email, password, name, role } = req.body;
+    const { email, password, name, role, position } = req.body;
     if (!email || !password || !name) {
       return res.status(400).json({ error: 'Email, password and name required' });
     }
@@ -507,9 +508,9 @@ app.post('/api/manager/create-employee', verifyToken, async (req, res) => {
     if (existing) return res.status(400).json({ error: 'Email already exists' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const newUser = new User({ email, password: hashedPassword, name, role: newRole });
+    const newUser = new User({ email, password: hashedPassword, name, position: (position || '').trim(), role: newRole });
     await newUser.save();
-    res.json({ message: 'User created', user: { id: newUser._id, email: newUser.email, name: newUser.name, role: newUser.role } });
+    res.json({ message: 'User created', user: { id: newUser._id, email: newUser.email, name: newUser.name, position: newUser.position, role: newUser.role } });
     sendWelcomeEmail(email, name, password);
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -586,6 +587,24 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
          </div>`
       );
     }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Manager: Update employee (name, position)
+app.put('/api/manager/employee/:id', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const updates = {};
+    if (typeof req.body.name === 'string' && req.body.name.trim()) updates.name = req.body.name.trim();
+    if (typeof req.body.position === 'string') updates.position = req.body.position.trim();
+    const updated = await User.findByIdAndUpdate(req.params.id, updates, { new: true }).select('-password');
+    if (!updated) return res.status(404).json({ error: 'Employee not found' });
+    res.json({ message: 'Employee updated', employee: updated });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

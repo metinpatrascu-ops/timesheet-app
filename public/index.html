@@ -433,7 +433,7 @@
         function showApp() {
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('appPage').classList.remove('hidden');
-            document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('userName').textContent = currentUser.name + (currentUser.position ? ' · ' + currentUser.position : '');
             loadTodayData();
             setInterval(updateCurrentTime, 1000);
             updateCurrentTime();

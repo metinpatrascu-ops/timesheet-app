@@ -88,6 +88,8 @@ const timesheetSchema = new mongoose.Schema({
   checkIn: Date,
   checkOut: Date,
   totalHours: Number,
+  extraHours: Number,
+  extraNotes: String,
   breaks: [{
     start: Date,
     end: Date,
@@ -602,6 +604,67 @@ app.post('/api/manager/add-timesheet', verifyToken, async (req, res) => {
   }
 });
 
+// Manager: Add extra hours (e.g. event work on a day off)
+app.post('/api/manager/extra-hours', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+    const { employeeId, date, hours, notes } = req.body;
+    const hoursNum = parseFloat(hours);
+    if (!employeeId || !date || !hoursNum || hoursNum <= 0) {
+      return res.status(400).json({ error: 'employeeId, date și un număr de ore valid sunt obligatorii' });
+    }
+
+    const dateObj = new Date(date);
+    dateObj.setHours(0, 0, 0, 0);
+
+    let timesheet = await Timesheet.findOne({
+      userId: employeeId,
+      date: { $gte: dateObj, $lt: new Date(dateObj.getTime() + 24*60*60*1000) }
+    });
+
+    if (timesheet) {
+      timesheet.extraHours = (timesheet.extraHours || 0) + hoursNum;
+      timesheet.extraNotes = [timesheet.extraNotes, notes].filter(Boolean).join(' | ');
+    } else {
+      timesheet = new Timesheet({
+        userId: employeeId,
+        date: dateObj,
+        extraHours: hoursNum,
+        extraNotes: notes || '',
+        totalHours: 0,
+        status: 'approved',
+        approvedBy: req.userId,
+        approvedAt: new Date(),
+        notes: ''
+      });
+    }
+    await timesheet.save();
+
+    const employee = await User.findById(employeeId);
+    const msgText = `Ți s-au adăugat ${hoursNum}h extra pentru ${date}${notes ? ` (${notes})` : ''}.`;
+    Notification.create({ userId: employeeId, message: msgText }).catch(() => {});
+
+    res.json({ message: 'Extra hours added', timesheet });
+
+    if (employee) {
+      sendNotifEmail(employee.email, employee.name, `Ore extra adăugate — ${date}`,
+        `<p>Managerul tău ți-a adăugat <strong>ore extra</strong>.</p>
+         <div style="background:#f9f9f9;padding:15px;border-radius:8px;margin:16px 0;">
+           <p><strong>Data:</strong> ${date}</p>
+           <p><strong>Ore extra:</strong> +${hoursNum}h</p>
+           <p><strong>Total ore extra pe zi:</strong> ${timesheet.extraHours}h</p>
+           ${notes ? `<p><strong>Motiv:</strong> ${notes}</p>` : ''}
+         </div>`
+      );
+    }
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Manager: Add leave (concediu) for an employee
 app.post('/api/manager/leave', verifyToken, async (req, res) => {
   try {
@@ -747,15 +810,15 @@ app.put('/api/manager/timesheet/:id', verifyToken, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
-    const { date, checkIn, checkOut, notes } = req.body;
+    const { date, checkIn, checkOut, notes, extraHours, extraNotes } = req.body;
     const roOffset2 = (() => { const d = new Date(date+'T12:00:00Z'); const l = new Date(d.toLocaleString('en-US',{timeZone:'Europe/Bucharest'})); const h = Math.round((l-d)/3600000); return (h>=0?'+':'-')+String(Math.abs(h)).padStart(2,'0')+':00'; })();
     const checkInDate = new Date(`${date}T${checkIn}:00${roOffset2}`);
     const checkOutDate = new Date(`${date}T${checkOut}:00${roOffset2}`);
     const totalHours = Math.round(((checkOutDate - checkInDate) / (1000 * 60 * 60)) * 2) / 2;
-    const ts = await Timesheet.findByIdAndUpdate(req.params.id,
-      { checkIn: checkInDate, checkOut: checkOutDate, totalHours, notes: notes || '', status: 'approved', approvedBy: req.userId, approvedAt: new Date() },
-      { new: true }
-    );
+    const updateFields = { checkIn: checkInDate, checkOut: checkOutDate, totalHours, notes: notes || '', status: 'approved', approvedBy: req.userId, approvedAt: new Date() };
+    if (extraHours !== undefined) updateFields.extraHours = Math.max(0, parseFloat(extraHours) || 0);
+    if (extraNotes !== undefined) updateFields.extraNotes = extraNotes;
+    const ts = await Timesheet.findByIdAndUpdate(req.params.id, updateFields, { new: true });
     if (!ts) return res.status(404).json({ error: 'Not found' });
     const employee = await User.findById(ts.userId);
     if (employee) {

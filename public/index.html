@@ -576,7 +576,7 @@
                 const html = data.timesheets.map(ts => `
                     <div class="activity-item">
                         <div class="activity-time">${new Date(ts.date).toLocaleDateString()}</div>
-                        <div class="activity-text">${ts.totalHours || 0}h - Status: <strong>${ts.status}</strong></div>
+                        <div class="activity-text">${ts.totalHours || 0}h${ts.extraHours ? ` <span style="color:#f39c12;font-weight:700;">+${ts.extraHours}h⭐ extra</span>` : ''} - Status: <strong>${ts.status}</strong></div>
                     </div>
                 `).join('');
 
@@ -619,7 +619,7 @@
                     ${data.timesheets.map(ts => `
                         <div class="activity-item">
                             <div class="activity-time">${new Date(ts.date).toLocaleDateString()}</div>
-                            <div class="activity-text">${ts.totalHours || 0}h - <span class="status-badge status-${ts.status}">${ts.status}</span></div>
+                            <div class="activity-text">${ts.totalHours || 0}h${ts.extraHours ? ` <span style="color:#f39c12;font-weight:700;">+${ts.extraHours}h⭐ extra</span>` : ''} - <span class="status-badge status-${ts.status}">${ts.status}</span></div>
                         </div>
                     `).join('')}
                 `;
@@ -764,6 +764,7 @@
                 }).sort((a, b) => new Date(b.date) - new Date(a.date));
 
                 const totalHours = monthly.reduce((s, t) => s + (t.totalHours || 0), 0);
+                const extraHours = monthly.reduce((s, t) => s + (t.extraHours || 0), 0);
                 const approved = monthly.filter(t => t.status === 'approved').length;
                 const pending = monthly.filter(t => t.status === 'pending').length;
 
@@ -773,8 +774,8 @@
                         <div class="summary-value">${monthly.length}</div>
                     </div>
                     <div class="summary-box">
-                        <div class="summary-label">Total ore</div>
-                        <div class="summary-value">${totalHours.toFixed(1)}h</div>
+                        <div class="summary-label">Total ore${extraHours ? ' (+ extra)' : ''}</div>
+                        <div class="summary-value">${totalHours.toFixed(1)}h${extraHours ? ` <span style="color:#f39c12;font-size:16px;">+${extraHours.toFixed(1)}h⭐</span>` : ''}</div>
                     </div>
                     <div class="summary-box">
                         <div class="summary-label">Aprobate / Așteptare</div>
@@ -799,7 +800,7 @@
                             <span style="font-weight:500;">${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
                             <span>${cin}</span>
                             <span>${cout}</span>
-                            <span style="font-weight:600;">${t.totalHours||0}h</span>
+                            <span style="font-weight:600;">${t.totalHours||0}h${t.extraHours ? `<br><small style="color:#f39c12;font-weight:700;">+${t.extraHours}h⭐</small>` : ''}</span>
                             <span class="badge ${sb}">${sl}</span>
                         </div>`;
                     }).join('')}`;

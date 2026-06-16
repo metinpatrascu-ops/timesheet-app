@@ -274,6 +274,35 @@
                         <button type="submit" style="padding:10px 20px;background:#27ae60;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">Adauga Zi</button>
                     </form>
                 </div>
+
+                <div class="card">
+                    <h2>⭐ Ore Extra (eveniment)</h2>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:15px;">Pentru când un angajat vine din liber doar pentru un eveniment. Orele se adaugă peste programul existent (dacă există) și ziua e aprobată automat.</p>
+                    <div id="extraMsg"></div>
+                    <form onsubmit="addExtraHours(event)" style="max-width:500px;">
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Angajat:</label>
+                            <select id="extraEmployee" class="frm-input" required>
+                                <option value="">-- Selecteaza angajat --</option>
+                            </select>
+                        </div>
+                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:15px;">
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">Data:</label>
+                                <input type="date" id="extraDate" class="frm-input" required>
+                            </div>
+                            <div>
+                                <label style="display:block;margin-bottom:5px;font-weight:500;">Ore extra:</label>
+                                <input type="number" id="extraHoursInput" class="frm-input" min="0.5" max="24" step="0.5" placeholder="ex: 4" required>
+                            </div>
+                        </div>
+                        <div style="margin-bottom:15px;">
+                            <label style="display:block;margin-bottom:5px;font-weight:500;">Motiv (optional):</label>
+                            <input type="text" id="extraNotes" placeholder="ex: eveniment nuntă, banchet..." class="frm-input">
+                        </div>
+                        <button type="submit" style="padding:10px 20px;background:#f39c12;color:white;border:none;border-radius:4px;cursor:pointer;font-size:14px;font-weight:500;">⭐ Adauga Ore Extra</button>
+                    </form>
+                </div>
             </div>
 
             <!-- CREATE USER TAB -->
@@ -508,6 +537,7 @@
             document.getElementById('loginPage').classList.add('hidden');
             document.getElementById('appPage').classList.remove('hidden');
             document.getElementById('userName').textContent = currentUser.name;
+            document.getElementById('extraDate').value = new Date().toLocaleDateString('en-CA');
             loadOverview();
             loadEmployeesForForms();
         }
@@ -548,7 +578,7 @@
 
                 const totalHoursToday = allTimesheets
                     .filter(t => new Date(t.date).toDateString() === new Date().toDateString())
-                    .reduce((sum, t) => sum + (t.totalHours || 0), 0);
+                    .reduce((sum, t) => sum + (t.totalHours || 0) + (t.extraHours || 0), 0);
                 document.getElementById('totalHoursToday').textContent = totalHoursToday.toFixed(1) + 'h';
 
                 // Today's check-in/out activity
@@ -567,7 +597,7 @@
                             <span class="c-name" style="font-weight:500;">${t.userId?.name||'N/A'}</span>
                             <span class="c-in">${cin}</span>
                             <span class="c-out">${cout}</span>
-                            <span class="c-hours" style="font-weight:600;">${t.totalHours||0}h</span>
+                            <span class="c-hours" style="font-weight:600;">${t.totalHours||0}h${t.extraHours ? ` <span style="color:#f39c12;">+${t.extraHours}h⭐</span>` : ''}</span>
                             <span class="c-status badge ${sb}">${sl}</span>
                         </div>`;
                     }).join('')}` : '<p style="color:#999;">Nicio activitate azi.</p>';
@@ -746,13 +776,17 @@
             try {
                 const res = await apiFetch('/api/manager/team-timesheets');
                 const data = await res.json();
-                let totalHours = 0, approved = 0;
-                data.timesheets?.forEach(t => { totalHours += t.totalHours || 0; if (t.status === 'approved') approved++; });
+                let totalHours = 0, approved = 0, extraTotal = 0;
+                data.timesheets?.forEach(t => { totalHours += t.totalHours || 0; extraTotal += t.extraHours || 0; if (t.status === 'approved') approved++; });
                 document.getElementById('reportContent').innerHTML = `
-                    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:15px;">
+                    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:15px;">
                         <div class="summary-box">
                             <div class="summary-label">Total Ore Lucrate</div>
                             <div class="summary-value">${totalHours.toFixed(1)}h</div>
+                        </div>
+                        <div class="summary-box">
+                            <div class="summary-label">⭐ Ore Extra</div>
+                            <div class="summary-value" style="color:#f39c12;">${extraTotal.toFixed(1)}h</div>
                         </div>
                         <div class="summary-box">
                             <div class="summary-label">Zile Aprobate</div>
@@ -767,6 +801,7 @@
                 employeesCache.map(e => `<option value="${e._id}">${e.name}${e.position ? ' — ' + e.position : ''}</option>`).join('');
             document.getElementById('addDayEmployee').innerHTML = options;
             document.getElementById('leaveEmployee').innerHTML = options;
+            document.getElementById('extraEmployee').innerHTML = options;
             const list = document.getElementById('employeesListCreate');
             list.innerHTML = employeesCache.length === 0
                 ? '<p style="color:#999;">Niciun angajat creat încă.</p>'
@@ -857,6 +892,39 @@
             } finally { btnLoading(btn, false); }
         }
 
+        async function addExtraHours(event) {
+            event.preventDefault();
+            const btn = event.target.querySelector('button[type=submit]');
+            const msgEl = document.getElementById('extraMsg');
+            btnLoading(btn, true);
+            try {
+                const res = await apiFetch('/api/manager/extra-hours', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        employeeId: document.getElementById('extraEmployee').value,
+                        date: document.getElementById('extraDate').value,
+                        hours: document.getElementById('extraHoursInput').value,
+                        notes: document.getElementById('extraNotes').value
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    toast('Ore extra adăugate! Angajatul a fost notificat.');
+                    msgEl.innerHTML = `<div style="background:#d4edda;color:#155724;padding:10px;border-radius:6px;margin-bottom:15px;">✓ Ore extra adăugate (total pe zi: ${data.timesheet.extraHours}h extra)</div>`;
+                    document.getElementById('extraHoursInput').value = '';
+                    document.getElementById('extraNotes').value = '';
+                    setTimeout(() => { msgEl.innerHTML = ''; }, 4000);
+                    loadOverview();
+                } else {
+                    toast(data.error || 'Eroare.', 'error');
+                    msgEl.innerHTML = `<div style="background:#f8d7da;color:#721c24;padding:10px;border-radius:6px;margin-bottom:15px;">✗ ${data.error}</div>`;
+                }
+            } catch (err) {
+                toast('Eroare: ' + err.message, 'error');
+            } finally { btnLoading(btn, false); }
+        }
+
         function renderRecentTimesheets(allTimesheets) {
             const sorted = [...allTimesheets].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 30);
             const el = document.getElementById('recentTimesheets');
@@ -873,7 +941,7 @@
                     const dateStr = new Date(t.date).toISOString().slice(0,10);
                     return `
                     <div id="ts-row-${t._id}" class="trow cols-recent">
-                        <span class="c-name" style="font-weight:500;">${t.userId?.name||'N/A'}</span>
+                        <span class="c-name" style="font-weight:500;">${t.userId?.name||'N/A'}${t.extraHours ? ` <span style="color:#f39c12;font-size:11px;font-weight:700;" title="${t.extraNotes||'ore extra'}">⭐+${t.extraHours}h</span>` : ''}</span>
                         <span class="c-date">${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
                         <span class="c-in">${cin}</span><span class="c-out">${cout}</span>
                         <span class="c-status badge ${sb}">${sl}</span>

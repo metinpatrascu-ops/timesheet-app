@@ -466,7 +466,7 @@ app.get('/api/manager/team-timesheets', verifyToken, async (req, res) => {
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const { date, status } = req.query;
+    const { date, status, month, year } = req.query;
     const query = {};
 
     if (date) {
@@ -475,12 +475,19 @@ app.get('/api/manager/team-timesheets', verifyToken, async (req, res) => {
       const endDate = new Date(startDate);
       endDate.setHours(23, 59, 59, 999);
       query.date = { $gte: startDate, $lte: endDate };
+    } else if (month && year) {
+      const m = parseInt(month) - 1;
+      const y = parseInt(year);
+      query.date = {
+        $gte: new Date(y, m, 1),
+        $lt:  new Date(y, m + 1, 1)
+      };
     }
 
     if (status) query.status = status;
 
     const timesheets = await Timesheet.find(query)
-      .populate('userId', 'name email')
+      .populate('userId', 'name email position')
       .sort({ date: -1 });
 
     res.json({ timesheets });

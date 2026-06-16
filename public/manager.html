@@ -177,6 +177,7 @@
                 <button class="tab" onclick="switchTab(event, 'addday')"><i class="ti ti-calendar-plus"></i> Adauga Zi</button>
                 <button class="tab" onclick="switchTab(event, 'createuser')"><i class="ti ti-user-plus"></i> Creeaza Cont</button>
                 <button class="tab" onclick="switchTab(event, 'leave')"><i class="ti ti-beach"></i> Concediu</button>
+                <button class="tab" onclick="switchTab(event, 'history')"><i class="ti ti-history"></i> Istoric</button>
                 <button class="tab" onclick="switchTab(event, 'reports')"><i class="ti ti-chart-bar"></i> Rapoarte</button>
                 <button class="tab" onclick="switchTab(event, 'import')"><i class="ti ti-upload"></i> Import Program</button>
             </div>
@@ -397,6 +398,25 @@
                 </div>
             </div>
 
+            <!-- HISTORY TAB -->
+            <div id="history" class="tab-content">
+                <div class="card">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px;">
+                        <h2 style="margin:0;">Istoric Pontaj</h2>
+                        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                            <button onclick="historyPrevMonth()" style="padding:6px 12px;border:1px solid var(--border);background:var(--item);color:var(--text);border-radius:4px;cursor:pointer;font-size:15px;">‹</button>
+                            <strong id="historyMonthLabel" style="min-width:130px;text-align:center;"></strong>
+                            <button onclick="historyNextMonth()" style="padding:6px 12px;border:1px solid var(--border);background:var(--item);color:var(--text);border-radius:4px;cursor:pointer;font-size:15px;">›</button>
+                            <select id="historyEmpFilter" onchange="loadHistory()" style="padding:7px 10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);border-radius:4px;font-size:13px;">
+                                <option value="">Toți angajații</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div id="historySummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;"></div>
+                    <div id="historyList"><p style="color:var(--text2);">Se încarcă...</p></div>
+                </div>
+            </div>
+
             <!-- IMPORT TAB -->
             <div id="import" class="tab-content">
                 <div class="card">
@@ -551,6 +571,7 @@
             if (tabName === 'employees') loadEmployees();
             if (tabName === 'reports') loadReports();
             if (tabName === 'leave') loadLeaves();
+            if (tabName === 'history') loadHistory();
         }
 
         async function apiFetch(url, opts = {}) {
@@ -1255,6 +1276,93 @@
                 loadOverview();
             }
             if (fail > 0) toast(`${fail} rânduri nu au putut fi salvate.`, 'error');
+        }
+
+        // ── HISTORY TAB ──────────────────────────────────────────
+        let historyDate = new Date();
+
+        function historyMonthStr() {
+            return historyDate.toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' });
+        }
+
+        function historyPrevMonth() {
+            historyDate = new Date(historyDate.getFullYear(), historyDate.getMonth() - 1, 1);
+            loadHistory();
+        }
+        function historyNextMonth() {
+            const next = new Date(historyDate.getFullYear(), historyDate.getMonth() + 1, 1);
+            if (next <= new Date()) { historyDate = next; loadHistory(); }
+        }
+
+        async function loadHistory() {
+            document.getElementById('historyMonthLabel').textContent = historyMonthStr();
+            // disable next-month button if already current month
+            const nextBtn = document.querySelector('#history button:last-of-type');
+            const isCurrent = historyDate.getMonth() === new Date().getMonth() && historyDate.getFullYear() === new Date().getFullYear();
+            if (nextBtn) nextBtn.disabled = isCurrent;
+
+            document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Se încarcă...</p>';
+            document.getElementById('historySummary').innerHTML = '';
+
+            // populate employee filter dropdown once
+            const sel = document.getElementById('historyEmpFilter');
+            if (sel.options.length <= 1 && employeesCache && employeesCache.length > 0) {
+                employeesCache.forEach(e => {
+                    const o = document.createElement('option');
+                    o.value = e._id; o.textContent = e.name;
+                    sel.appendChild(o);
+                });
+            }
+
+            try {
+                const m = historyDate.getMonth() + 1;
+                const y = historyDate.getFullYear();
+                const res = await apiFetch(`/api/manager/team-timesheets?month=${m}&year=${y}`);
+                const data = await res.json();
+                let rows = data.timesheets || [];
+
+                // filter by employee if selected
+                const empId = sel.value;
+                if (empId) rows = rows.filter(t => (t.userId?._id || t.userId) === empId);
+
+                // summary
+                const totalH = rows.reduce((s, t) => s + (t.totalHours || 0), 0);
+                const extraH = rows.reduce((s, t) => s + (t.extraHours || 0), 0);
+                const approved = rows.filter(t => t.status === 'approved').length;
+                document.getElementById('historySummary').innerHTML = `
+                    <div class="summary-box"><div class="summary-label">Zile lucrate</div><div class="summary-value">${rows.length}</div></div>
+                    <div class="summary-box"><div class="summary-label">Total ore</div><div class="summary-value">${totalH.toFixed(1)}h${extraH ? `<span style="color:#f39c12;font-size:14px;"> +${extraH.toFixed(1)}h⭐</span>` : ''}</div></div>
+                    <div class="summary-box"><div class="summary-label">Aprobate</div><div class="summary-value">${approved}</div></div>`;
+
+                if (rows.length === 0) {
+                    document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Nicio zi înregistrată în această lună.</p>';
+                    return;
+                }
+
+                document.getElementById('historyList').innerHTML = `
+                    <div class="trow-head" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:4px;">
+                        <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span>
+                    </div>
+                    ${rows.map(t => {
+                        const cin  = t.checkIn  ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                        const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                        const sb   = t.status==='approved' ? 'badge-ok' : t.status==='rejected' ? 'badge-err' : 'badge-warn';
+                        const sl   = t.status==='approved' ? 'Aprobat' : t.status==='rejected' ? 'Respins' : 'Așteptare';
+                        const name = t.userId?.name || 'N/A';
+                        const pos  = t.userId?.position ? `<span style="font-size:11px;color:var(--text2);"> — ${t.userId.position}</span>` : '';
+                        const extra = t.extraHours ? `<br><small style="color:#f39c12;font-weight:700;">+${t.extraHours}h⭐${t.extraNotes ? ' ' + t.extraNotes : ''}</small>` : '';
+                        return `<div style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr;gap:8px;align-items:center;padding:9px 10px;background:var(--item);border-radius:6px;margin-bottom:4px;font-size:13px;">
+                            <span style="font-weight:500;">${name}${pos}</span>
+                            <span>${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
+                            <span style="color:#27ae60;font-weight:600;">${cin}</span>
+                            <span style="color:#e74c3c;font-weight:600;">${cout}</span>
+                            <span style="font-weight:600;">${t.totalHours||0}h${extra}</span>
+                            <span class="badge ${sb}">${sl}</span>
+                        </div>`;
+                    }).join('')}`;
+            } catch (err) {
+                document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Eroare la încărcare.</p>';
+            }
         }
 
         checkLogin();

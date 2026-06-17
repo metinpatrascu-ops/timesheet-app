@@ -312,6 +312,12 @@
                     <div id="monthSummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;"></div>
                     <div id="monthList"><p style="color:#999;">Se încarcă...</p></div>
                 </div>
+
+                <div class="card" id="eventsCard" style="display:none;">
+                    <h2>⭐ Evenimentele Mele</h2>
+                    <div id="eventsBonus" style="margin-bottom:16px;"></div>
+                    <div id="eventsDaysList"></div>
+                </div>
             </div>
         </div>
     </div>
@@ -458,7 +464,7 @@
 
             if (tabName === 'calendar') loadHistory();
             if (tabName === 'approvals') loadApprovalsStatus();
-            if (tabName === 'month') loadMonthTimesheets();
+            if (tabName === 'month') { loadMonthTimesheets(); loadMyEvents(); }
         }
 
         // Load today's data
@@ -820,6 +826,50 @@
                 clearInterval(_tokenCheck);
             }
         }, 500);
+
+        async function loadMyEvents() {
+            try {
+                const res = await fetch(`${API_URL}/api/timesheet/my-events`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const events = data.events || [];
+                const card = document.getElementById('eventsCard');
+
+                if (events.length === 0) { card.style.display = 'none'; return; }
+                card.style.display = '';
+
+                document.getElementById('eventsBonus').innerHTML = `
+                    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+                        <div style="background:rgba(243,156,18,0.12);border:1px solid #f39c12;border-radius:8px;padding:14px;text-align:center;">
+                            <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Evenimente participare</div>
+                            <div style="font-size:32px;font-weight:800;color:#f39c12;">${events.length}</div>
+                        </div>
+                        <div style="background:rgba(39,174,96,0.12);border:1px solid #27ae60;border-radius:8px;padding:14px;text-align:center;">
+                            <div style="font-size:12px;color:var(--text2);margin-bottom:4px;">Bonus acumulat</div>
+                            <div style="font-size:32px;font-weight:800;color:#27ae60;">${data.bonus} lei</div>
+                            <div style="font-size:11px;color:var(--text2);">${events.length} × ${data.payPerEvent} lei</div>
+                        </div>
+                    </div>`;
+
+                document.getElementById('eventsDaysList').innerHTML = `
+                    <div style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin:14px 0 8px;">Toate evenimentele tale</div>
+                    ${events.map((e, i) => {
+                        const cin  = e.checkIn  ? new Date(e.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                        const cout = e.checkOut ? new Date(e.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                        return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(243,156,18,0.07);border-left:3px solid #f39c12;border-radius:6px;margin-bottom:6px;flex-wrap:wrap;">
+                            <span style="font-size:15px;font-weight:700;color:#f39c12;min-width:24px;">${i+1}</span>
+                            <div style="flex:1;min-width:120px;">
+                                <div style="font-weight:600;">${new Date(e.date).toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</div>
+                                ${e.eventName ? `<div style="font-size:12px;color:#f39c12;">📌 ${e.eventName}</div>` : ''}
+                                <div style="font-size:12px;color:var(--text2);">${cin} – ${cout}${e.totalHours ? ` · ${e.totalHours}h` : ''}${e.extraHours ? ` +${e.extraHours}h⭐` : ''}</div>
+                            </div>
+                            <div style="font-weight:700;color:#27ae60;font-size:15px;">${data.payPerEvent} lei</div>
+                        </div>`;
+                    }).join('')}
+                    <div style="text-align:right;padding:10px 4px 0;font-size:14px;font-weight:700;color:#27ae60;">Total: ${data.bonus} lei</div>`;
+            } catch (err) { console.error(err); }
+        }
     </script>
 </body>
 </html>

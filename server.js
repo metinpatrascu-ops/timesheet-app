@@ -359,6 +359,15 @@ app.get('/api/timesheet/today', verifyToken, async (req, res) => {
 });
 
 // Get all timesheets for a user (with pagination)
+// Employee: get own event days + bonus
+app.get('/api/timesheet/my-events', verifyToken, async (req, res) => {
+  try {
+    const events = await Timesheet.find({ userId: req.userId, isEvent: true }).sort({ date: -1 });
+    const PAY_PER_EVENT = 250;
+    res.json({ events, total: events.length, bonus: events.length * PAY_PER_EVENT, payPerEvent: PAY_PER_EVENT });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/timesheet/history', verifyToken, async (req, res) => {
   try {
     const { page = 1, limit = 30 } = req.query;

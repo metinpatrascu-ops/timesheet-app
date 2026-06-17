@@ -846,6 +846,55 @@ app.post('/api/manager/timesheet/:id/event', verifyToken, async (req, res) => {
     ts.eventName = ts.isEvent ? (req.body.eventName || '').trim() || null : null;
     await ts.save();
     res.json({ isEvent: ts.isEvent, eventName: ts.eventName });
+
+    if (ts.isEvent) {
+      const PAY_PER_EVENT = 250;
+      const [employee, allEvents] = await Promise.all([
+        User.findById(ts.userId),
+        Timesheet.find({ userId: ts.userId, isEvent: true }).sort({ date: 1 })
+      ]);
+      if (employee) {
+        const total = allEvents.length;
+        const totalPay = total * PAY_PER_EVENT;
+        const dateStr = new Date(ts.date).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+        const eventsList = allEvents.map((e, i) =>
+          `<tr style="border-bottom:1px solid #eee;">
+            <td style="padding:6px 10px;">${i + 1}.</td>
+            <td style="padding:6px 10px;">${new Date(e.date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' })}</td>
+            <td style="padding:6px 10px;color:#f39c12;font-weight:600;">${e.eventName || '—'}</td>
+            <td style="padding:6px 10px;font-weight:600;color:#27ae60;">${PAY_PER_EVENT} lei</td>
+          </tr>`
+        ).join('');
+        sendNotifEmail(employee.email, employee.name,
+          `⭐ Eveniment înregistrat — bonus ${PAY_PER_EVENT} lei (total: ${totalPay} lei)`,
+          `<p>Managerul a înregistrat participarea ta la un eveniment:</p>
+           <div style="background:#fff8e6;padding:14px;border-radius:8px;margin:16px 0;border-left:4px solid #f39c12;">
+             <p style="font-size:16px;font-weight:bold;margin:0;">⭐ ${ts.eventName || 'Eveniment'}</p>
+             <p style="margin:6px 0 0;color:#856404;">📅 ${dateStr}</p>
+           </div>
+           <p style="font-size:15px;">Bonusul tău acumulat din evenimente:</p>
+           <table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:13px;">
+             <thead>
+               <tr style="background:#f9f9f9;">
+                 <th style="padding:8px 10px;text-align:left;color:#666;">#</th>
+                 <th style="padding:8px 10px;text-align:left;color:#666;">Data</th>
+                 <th style="padding:8px 10px;text-align:left;color:#666;">Eveniment</th>
+                 <th style="padding:8px 10px;text-align:left;color:#666;">Bonus</th>
+               </tr>
+             </thead>
+             <tbody>${eventsList}</tbody>
+             <tfoot>
+               <tr style="background:#f0fdf4;">
+                 <td colspan="3" style="padding:10px;font-weight:700;font-size:14px;">TOTAL ACUMULAT</td>
+                 <td style="padding:10px;font-weight:700;font-size:16px;color:#27ae60;">${totalPay} lei</td>
+               </tr>
+             </tfoot>
+           </table>
+           <p style="color:#666;font-size:12px;">Bonusul se calculează automat: ${total} eveniment${total !== 1 ? 'e' : ''} × ${PAY_PER_EVENT} lei</p>`
+        );
+        Notification.create({ userId: ts.userId, message: `⭐ Eveniment înregistrat! Bonus acumulat: ${totalPay} lei (${total} evenimente × ${PAY_PER_EVENT} lei).` }).catch(() => {});
+      }
+    }
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

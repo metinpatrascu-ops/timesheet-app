@@ -1352,8 +1352,8 @@
                 }
 
                 document.getElementById('historyList').innerHTML = `
-                    <div class="trow-head" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr 1.1fr;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:4px;">
-                        <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span><span>Eveniment</span>
+                    <div class="trow-head" style="display:grid;grid-template-columns:1.3fr 1.2fr 0.7fr 0.7fr 0.55fr 0.85fr 1fr 1.15fr;gap:6px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:4px;">
+                        <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span><span>Eveniment</span><span>Absență</span>
                     </div>
                     ${rows.map(t => {
                         const cin  = t.checkIn  ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
@@ -1362,11 +1362,19 @@
                         const sl   = t.status==='approved' ? 'Aprobat' : t.status==='rejected' ? 'Respins' : 'Așteptare';
                         const name = t.userId?.name || 'N/A';
                         const pos  = t.userId?.position ? `<span style="font-size:11px;color:var(--text2);"> — ${t.userId.position}</span>` : '';
-                        const extra = t.extraHours ? `<br><small style="color:#f39c12;font-weight:700;">+${t.extraHours}h⭐${t.extraNotes ? ' ' + t.extraNotes : ''}</small>` : '';
+                        const extra = t.extraHours ? `<br><small style="color:#f39c12;font-weight:700;">+${t.extraHours}h⭐</small>` : '';
                         const evBtn = t.isEvent
-                            ? `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;background:#f39c12;color:white;">⭐ Eveniment</button>${t.eventName ? `<br><small style="color:var(--text2);">${t.eventName}</small>` : ''}`
-                            : `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;background:var(--item);color:var(--text2);">☆ Marchează</button>`;
-                        return `<div id="hist-row-${t._id}" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr 1.1fr;gap:8px;align-items:center;padding:9px 10px;background:${t.isEvent ? 'rgba(243,156,18,0.08)' : 'var(--item)'};border-radius:6px;margin-bottom:4px;font-size:13px;${t.isEvent ? 'border-left:3px solid #f39c12;' : ''}">
+                            ? `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:3px 8px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:#f39c12;color:white;">⭐ Eveniment</button>${t.eventName ? `<br><small style="color:var(--text2);">${t.eventName}</small>` : ''}`
+                            : `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:3px 8px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:11px;background:var(--item);color:var(--text2);">☆ Marchează</button>`;
+                        const dt = t.dayType || 'normal';
+                        const absBtn = dt === 'sick'
+                            ? `<span style="display:flex;gap:4px;flex-wrap:wrap;"><span style="padding:3px 7px;background:#d1ecf1;color:#0c5460;border-radius:4px;font-size:11px;font-weight:600;">🤒 Sick</span><button onclick="setDayType('${t._id}','normal',this)" style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--item);color:var(--text2);">✕</button></span>`
+                            : dt === 'noshow'
+                            ? `<span style="display:flex;gap:4px;flex-wrap:wrap;"><span style="padding:3px 7px;background:#f8d7da;color:#721c24;border-radius:4px;font-size:11px;font-weight:600;">❌ No Show</span><button onclick="setDayType('${t._id}','normal',this)" style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--item);color:var(--text2);">✕</button></span>`
+                            : `<span style="display:flex;gap:3px;"><button onclick="setDayType('${t._id}','sick',this)" style="padding:3px 7px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:#17a2b8;color:white;">🤒</button><button onclick="setDayType('${t._id}','noshow',this)" style="padding:3px 7px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:#e74c3c;color:white;">❌</button></span>`;
+                        const rowBg = dt==='sick' ? 'rgba(23,162,184,0.07)' : dt==='noshow' ? 'rgba(231,76,60,0.07)' : t.isEvent ? 'rgba(243,156,18,0.07)' : 'var(--item)';
+                        const rowBorder = dt==='sick' ? 'border-left:3px solid #17a2b8;' : dt==='noshow' ? 'border-left:3px solid #e74c3c;' : t.isEvent ? 'border-left:3px solid #f39c12;' : '';
+                        return `<div id="hist-row-${t._id}" style="display:grid;grid-template-columns:1.3fr 1.2fr 0.7fr 0.7fr 0.55fr 0.85fr 1fr 1.15fr;gap:6px;align-items:center;padding:9px 10px;background:${rowBg};border-radius:6px;margin-bottom:4px;font-size:13px;${rowBorder}">
                             <span style="font-weight:500;">${name}${pos}</span>
                             <span>${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
                             <span style="color:#27ae60;font-weight:600;">${cin}</span>
@@ -1374,11 +1382,44 @@
                             <span style="font-weight:600;">${t.totalHours||0}h${extra}</span>
                             <span class="badge ${sb}">${sl}</span>
                             <span>${evBtn}</span>
+                            <span id="absCell-${t._id}">${absBtn}</span>
                         </div>`;
                     }).join('')}`;
             } catch (err) {
                 document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Eroare la încărcare.</p>';
             }
+        }
+
+        // ── SICK / NO-SHOW ───────────────────────────────────────
+        async function setDayType(id, type, btn) {
+            btn.disabled = true;
+            const cell = document.getElementById(`absCell-${id}`);
+            const row  = document.getElementById(`hist-row-${id}`);
+            const orig = cell.innerHTML;
+            cell.innerHTML = '<span style="font-size:11px;color:var(--text2);">...</span>';
+            try {
+                const res = await apiFetch(`/api/manager/timesheet/${id}/daytype`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ dayType: type })
+                });
+                const data = await res.json();
+                if (!res.ok) { cell.innerHTML = orig; toast(data.error || 'Eroare.', 'error'); return; }
+                const dt = data.dayType;
+                if (dt === 'sick') {
+                    cell.innerHTML = `<span style="display:flex;gap:4px;flex-wrap:wrap;"><span style="padding:3px 7px;background:#d1ecf1;color:#0c5460;border-radius:4px;font-size:11px;font-weight:600;">🤒 Sick</span><button onclick="setDayType('${id}','normal',this)" style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--item);color:var(--text2);">✕</button></span>`;
+                    if (row) { row.style.background='rgba(23,162,184,0.07)'; row.style.borderLeft='3px solid #17a2b8'; }
+                    toast('🤒 Zi de boală marcată — email trimis angajatului.');
+                } else if (dt === 'noshow') {
+                    cell.innerHTML = `<span style="display:flex;gap:4px;flex-wrap:wrap;"><span style="padding:3px 7px;background:#f8d7da;color:#721c24;border-radius:4px;font-size:11px;font-weight:600;">❌ No Show</span><button onclick="setDayType('${id}','normal',this)" style="padding:3px 7px;border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer;background:var(--item);color:var(--text2);">✕</button></span>`;
+                    if (row) { row.style.background='rgba(231,76,60,0.07)'; row.style.borderLeft='3px solid #e74c3c'; }
+                    toast('❌ Absență nemotivată marcată — email trimis angajatului.');
+                } else {
+                    cell.innerHTML = `<span style="display:flex;gap:3px;"><button onclick="setDayType('${id}','sick',this)" style="padding:3px 7px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:#17a2b8;color:white;">🤒</button><button onclick="setDayType('${id}','noshow',this)" style="padding:3px 7px;border:none;border-radius:4px;cursor:pointer;font-size:11px;font-weight:600;background:#e74c3c;color:white;">❌</button></span>`;
+                    if (row) { row.style.background='var(--item)'; row.style.borderLeft=''; }
+                    toast('Zi resetată la normal.');
+                }
+            } catch { cell.innerHTML = orig; toast('Eroare.', 'error'); }
         }
 
         // ── EVENTS ───────────────────────────────────────────────
@@ -1436,17 +1477,24 @@
                     byEmp[uid].count++;
                 });
 
+                const PAY_PER_EVENT = 250;
+                const totalPay = Object.values(byEmp).reduce((s, e) => s + e.count * PAY_PER_EVENT, 0);
+
                 const summaryHtml = Object.values(byEmp).sort((a,b) => b.count - a.count).map(e => `
                     <div class="summary-box" style="text-align:left;display:flex;align-items:center;gap:12px;padding:12px 16px;">
-                        <span style="font-size:28px;font-weight:bold;color:#f39c12;min-width:40px;text-align:center;">${e.count}</span>
-                        <div>
+                        <span style="font-size:26px;font-weight:bold;color:#f39c12;min-width:36px;text-align:center;">${e.count}</span>
+                        <div style="flex:1;">
                             <div style="font-weight:600;">${e.name}</div>
-                            ${e.pos ? `<div style="font-size:12px;color:var(--text2);">${e.pos}</div>` : ''}
+                            ${e.pos ? `<div style="font-size:11px;color:var(--text2);">${e.pos}</div>` : ''}
+                            <div style="font-size:13px;color:#27ae60;font-weight:700;margin-top:2px;">${e.count * PAY_PER_EVENT} lei</div>
                         </div>
                     </div>`).join('');
                 document.getElementById('eventsSummary').innerHTML = `
-                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:8px;">${summaryHtml}</div>
-                    <p style="font-size:12px;color:var(--text2);margin-bottom:4px;">${events.length} zile de eveniment în total</p>`;
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:12px;">${summaryHtml}</div>
+                    <div style="background:rgba(39,174,96,0.1);border:1px solid #27ae60;border-radius:8px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:13px;color:var(--text2);">${events.length} zile de eveniment · ${PAY_PER_EVENT} lei/eveniment</span>
+                        <span style="font-size:20px;font-weight:700;color:#27ae60;">Total: ${totalPay} lei</span>
+                    </div>`;
 
                 // Full list grouped by month
                 const grouped = {};

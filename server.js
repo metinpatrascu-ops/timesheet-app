@@ -101,6 +101,7 @@ const timesheetSchema = new mongoose.Schema({
   notes: String,
   isEvent: { type: Boolean, default: false },
   eventName: String,
+  dayType: { type: String, enum: ['normal', 'sick', 'noshow'], default: 'normal' },
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -794,6 +795,44 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Manager: Set sick / noshow / normal on a timesheet day
+app.post('/api/manager/timesheet/:id/daytype', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+    const { dayType } = req.body;
+    if (!['normal', 'sick', 'noshow'].includes(dayType)) return res.status(400).json({ error: 'dayType invalid' });
+    const ts = await Timesheet.findById(req.params.id);
+    if (!ts) return res.status(404).json({ error: 'Not found' });
+    ts.dayType = dayType;
+    await ts.save();
+    res.json({ dayType: ts.dayType });
+    const employee = await User.findById(ts.userId);
+    if (employee && dayType !== 'normal') {
+      const dateStr = new Date(ts.date).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+      const isSick = dayType === 'sick';
+      sendNotifEmail(employee.email, employee.name,
+        isSick ? `Zi de boală înregistrată — ${new Date(ts.date).toLocaleDateString('ro-RO')}` : `Absență nemotivată — ${new Date(ts.date).toLocaleDateString('ro-RO')}`,
+        isSick
+          ? `<p>Managerul a înregistrat <strong>zi de boală</strong> pentru tine pe data de:</p>
+             <div style="background:#fff3cd;padding:14px;border-radius:8px;margin:16px 0;border-left:4px solid #f39c12;">
+               <p style="font-size:18px;font-weight:bold;margin:0;">📅 ${dateStr}</p>
+               <p style="margin:8px 0 0;color:#856404;">Status: 🤒 Concediu medical</p>
+             </div>
+             <p>Zi liberă — nicio acțiune necesară din partea ta.</p>`
+          : `<p>Managerul a înregistrat o <strong>absență nemotivată</strong> pentru tine pe data de:</p>
+             <div style="background:#f8d7da;padding:14px;border-radius:8px;margin:16px 0;border-left:4px solid #e74c3c;">
+               <p style="font-size:18px;font-weight:bold;margin:0;">📅 ${dateStr}</p>
+               <p style="margin:8px 0 0;color:#721c24;">Status: ❌ Absent nemotivat</p>
+             </div>
+             <p>Dacă crezi că este o eroare, contactează managerul.</p>`
+      );
+      const msg = isSick ? `Zi de boală înregistrată pentru ${new Date(ts.date).toLocaleDateString('ro-RO')}.` : `Absență nemotivată înregistrată pentru ${new Date(ts.date).toLocaleDateString('ro-RO')}.`;
+      Notification.create({ userId: ts.userId, message: msg }).catch(() => {});
+    }
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Manager: Toggle event flag on a timesheet

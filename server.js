@@ -99,6 +99,8 @@ const timesheetSchema = new mongoose.Schema({
   approvedBy: mongoose.Schema.Types.ObjectId,
   approvedAt: Date,
   notes: String,
+  isEvent: { type: Boolean, default: false },
+  eventName: String,
   createdAt: { type: Date, default: Date.now }
 });
 
@@ -792,6 +794,32 @@ app.get('/api/notifications', verifyToken, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Manager: Toggle event flag on a timesheet
+app.post('/api/manager/timesheet/:id/event', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+    const ts = await Timesheet.findById(req.params.id);
+    if (!ts) return res.status(404).json({ error: 'Not found' });
+    ts.isEvent = !ts.isEvent;
+    ts.eventName = ts.isEvent ? (req.body.eventName || '').trim() || null : null;
+    await ts.save();
+    res.json({ isEvent: ts.isEvent, eventName: ts.eventName });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Manager: Get all event timesheets (for the Events tab)
+app.get('/api/manager/events', verifyToken, async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user.role !== 'manager' && user.role !== 'admin') return res.status(403).json({ error: 'Unauthorized' });
+    const events = await Timesheet.find({ isEvent: true })
+      .populate('userId', 'name email position')
+      .sort({ date: -1 });
+    res.json({ events });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // Manager: Delete a timesheet entry

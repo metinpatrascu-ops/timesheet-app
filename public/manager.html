@@ -178,6 +178,7 @@
                 <button class="tab" onclick="switchTab(event, 'createuser')"><i class="ti ti-user-plus"></i> Creeaza Cont</button>
                 <button class="tab" onclick="switchTab(event, 'leave')"><i class="ti ti-beach"></i> Concediu</button>
                 <button class="tab" onclick="switchTab(event, 'history')"><i class="ti ti-history"></i> Istoric</button>
+                <button class="tab" onclick="switchTab(event, 'events')"><i class="ti ti-star"></i> Evenimente</button>
                 <button class="tab" onclick="switchTab(event, 'reports')"><i class="ti ti-chart-bar"></i> Rapoarte</button>
                 <button class="tab" onclick="switchTab(event, 'import')"><i class="ti ti-upload"></i> Import Program</button>
             </div>
@@ -417,6 +418,16 @@
                 </div>
             </div>
 
+            <!-- EVENTS TAB -->
+            <div id="events" class="tab-content">
+                <div class="card">
+                    <h2>⭐ Evenimente</h2>
+                    <p style="color:var(--text2);font-size:13px;margin-bottom:16px;">Zilele marcate ca eveniment din tab-ul Istoric. Poți vedea câte evenimente a avut fiecare angajat.</p>
+                    <div id="eventsSummary" style="margin-bottom:20px;"></div>
+                    <div id="eventsList"><p style="color:var(--text2);">Se încarcă...</p></div>
+                </div>
+            </div>
+
             <!-- IMPORT TAB -->
             <div id="import" class="tab-content">
                 <div class="card">
@@ -572,6 +583,7 @@
             if (tabName === 'reports') loadReports();
             if (tabName === 'leave') loadLeaves();
             if (tabName === 'history') loadHistory();
+            if (tabName === 'events') loadEvents();
         }
 
         async function apiFetch(url, opts = {}) {
@@ -1340,8 +1352,8 @@
                 }
 
                 document.getElementById('historyList').innerHTML = `
-                    <div class="trow-head" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:4px;">
-                        <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span>
+                    <div class="trow-head" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr 1.1fr;gap:8px;padding:6px 10px;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border);margin-bottom:4px;">
+                        <span>Angajat</span><span>Data</span><span>Check In</span><span>Check Out</span><span>Ore</span><span>Status</span><span>Eveniment</span>
                     </div>
                     ${rows.map(t => {
                         const cin  = t.checkIn  ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
@@ -1351,17 +1363,118 @@
                         const name = t.userId?.name || 'N/A';
                         const pos  = t.userId?.position ? `<span style="font-size:11px;color:var(--text2);"> — ${t.userId.position}</span>` : '';
                         const extra = t.extraHours ? `<br><small style="color:#f39c12;font-weight:700;">+${t.extraHours}h⭐${t.extraNotes ? ' ' + t.extraNotes : ''}</small>` : '';
-                        return `<div style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr;gap:8px;align-items:center;padding:9px 10px;background:var(--item);border-radius:6px;margin-bottom:4px;font-size:13px;">
+                        const evBtn = t.isEvent
+                            ? `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;background:#f39c12;color:white;">⭐ Eveniment</button>${t.eventName ? `<br><small style="color:var(--text2);">${t.eventName}</small>` : ''}`
+                            : `<button id="evbtn-${t._id}" onclick="toggleEvent('${t._id}',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;background:var(--item);color:var(--text2);">☆ Marchează</button>`;
+                        return `<div id="hist-row-${t._id}" style="display:grid;grid-template-columns:1.4fr 1.3fr 0.8fr 0.8fr 0.6fr 1fr 1.1fr;gap:8px;align-items:center;padding:9px 10px;background:${t.isEvent ? 'rgba(243,156,18,0.08)' : 'var(--item)'};border-radius:6px;margin-bottom:4px;font-size:13px;${t.isEvent ? 'border-left:3px solid #f39c12;' : ''}">
                             <span style="font-weight:500;">${name}${pos}</span>
                             <span>${new Date(t.date).toLocaleDateString('ro-RO',{weekday:'short',day:'numeric',month:'short'})}</span>
                             <span style="color:#27ae60;font-weight:600;">${cin}</span>
                             <span style="color:#e74c3c;font-weight:600;">${cout}</span>
                             <span style="font-weight:600;">${t.totalHours||0}h${extra}</span>
                             <span class="badge ${sb}">${sl}</span>
+                            <span>${evBtn}</span>
                         </div>`;
                     }).join('')}`;
             } catch (err) {
                 document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Eroare la încărcare.</p>';
+            }
+        }
+
+        // ── EVENTS ───────────────────────────────────────────────
+        async function toggleEvent(id, btn) {
+            btn.disabled = true;
+            btn.textContent = '...';
+            try {
+                let eventName = null;
+                // if marking as event (not yet an event), prompt for optional name
+                const row = document.getElementById(`hist-row-${id}`);
+                const isCurrentlyEvent = btn.style.background === 'rgb(243, 156, 18)' || btn.textContent.includes('Eveniment') || btn.innerHTML.includes('Eveniment');
+                if (!isCurrentlyEvent) {
+                    eventName = window.prompt('Numele evenimentului (opțional, apasă Enter pentru a sări):', '') || '';
+                }
+                const res = await apiFetch(`/api/manager/timesheet/${id}/event`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ eventName })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    if (data.isEvent) {
+                        btn.outerHTML = `<button id="evbtn-${id}" onclick="toggleEvent('${id}',this)" style="padding:4px 10px;border:none;border-radius:4px;cursor:pointer;font-size:12px;font-weight:600;background:#f39c12;color:white;">⭐ Eveniment</button>${data.eventName ? `<br><small style="color:var(--text2);">${data.eventName}</small>` : ''}`;
+                        if (row) { row.style.background = 'rgba(243,156,18,0.08)'; row.style.borderLeft = '3px solid #f39c12'; }
+                        toast('Zi marcată ca eveniment!');
+                    } else {
+                        btn.outerHTML = `<button id="evbtn-${id}" onclick="toggleEvent('${id}',this)" style="padding:4px 10px;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;background:var(--item);color:var(--text2);">☆ Marchează</button>`;
+                        if (row) { row.style.background = 'var(--item)'; row.style.borderLeft = ''; }
+                        toast('Eveniment eliminat.');
+                    }
+                } else { toast('Eroare.', 'error'); document.getElementById(`evbtn-${id}`)?.removeAttribute('disabled'); }
+            } catch { toast('Eroare.', 'error'); document.getElementById(`evbtn-${id}`)?.removeAttribute('disabled'); }
+        }
+
+        async function loadEvents() {
+            document.getElementById('eventsList').innerHTML = '<p style="color:var(--text2);">Se încarcă...</p>';
+            document.getElementById('eventsSummary').innerHTML = '';
+            try {
+                const res = await apiFetch('/api/manager/events');
+                const data = await res.json();
+                const events = data.events || [];
+
+                if (events.length === 0) {
+                    document.getElementById('eventsList').innerHTML = '<p style="color:var(--text2);">Niciun eveniment marcat încă. Mergi în tab-ul Istoric și apasă ☆ pe zilele de eveniment.</p>';
+                    return;
+                }
+
+                // Per-employee count
+                const byEmp = {};
+                events.forEach(e => {
+                    const uid = e.userId?._id || 'unknown';
+                    const name = e.userId?.name || 'N/A';
+                    const pos  = e.userId?.position || '';
+                    if (!byEmp[uid]) byEmp[uid] = { name, pos, count: 0 };
+                    byEmp[uid].count++;
+                });
+
+                const summaryHtml = Object.values(byEmp).sort((a,b) => b.count - a.count).map(e => `
+                    <div class="summary-box" style="text-align:left;display:flex;align-items:center;gap:12px;padding:12px 16px;">
+                        <span style="font-size:28px;font-weight:bold;color:#f39c12;min-width:40px;text-align:center;">${e.count}</span>
+                        <div>
+                            <div style="font-weight:600;">${e.name}</div>
+                            ${e.pos ? `<div style="font-size:12px;color:var(--text2);">${e.pos}</div>` : ''}
+                        </div>
+                    </div>`).join('');
+                document.getElementById('eventsSummary').innerHTML = `
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:8px;">${summaryHtml}</div>
+                    <p style="font-size:12px;color:var(--text2);margin-bottom:4px;">${events.length} zile de eveniment în total</p>`;
+
+                // Full list grouped by month
+                const grouped = {};
+                events.forEach(e => {
+                    const key = new Date(e.date).toLocaleDateString('ro-RO',{month:'long',year:'numeric'});
+                    if (!grouped[key]) grouped[key] = [];
+                    grouped[key].push(e);
+                });
+
+                document.getElementById('eventsList').innerHTML = Object.entries(grouped).map(([month, evs]) => `
+                    <div style="margin-bottom:20px;">
+                        <div style="font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border);">${month}</div>
+                        ${evs.map(e => {
+                            const cin  = e.checkIn  ? new Date(e.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                            const cout = e.checkOut ? new Date(e.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                            return `<div style="display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(243,156,18,0.08);border-left:3px solid #f39c12;border-radius:6px;margin-bottom:6px;flex-wrap:wrap;">
+                                <span style="font-size:18px;">⭐</span>
+                                <div style="flex:1;min-width:120px;">
+                                    <div style="font-weight:600;">${e.userId?.name||'N/A'} ${e.userId?.position ? `<span style="font-size:11px;color:var(--text2);font-weight:400;">— ${e.userId.position}</span>` : ''}</div>
+                                    <div style="font-size:12px;color:var(--text2);">${new Date(e.date).toLocaleDateString('ro-RO',{weekday:'long',day:'numeric',month:'long'})}</div>
+                                    ${e.eventName ? `<div style="font-size:12px;color:#f39c12;font-weight:600;">📌 ${e.eventName}</div>` : ''}
+                                </div>
+                                <div style="font-size:13px;color:var(--text2);">${cin} – ${cout} &nbsp;·&nbsp; <strong>${e.totalHours||0}h</strong>${e.extraHours ? ` <span style="color:#f39c12;">+${e.extraHours}h⭐</span>` : ''}</div>
+                            </div>`;
+                        }).join('')}
+                    </div>`).join('');
+            } catch (err) {
+                document.getElementById('eventsList').innerHTML = '<p style="color:var(--text2);">Eroare la încărcare.</p>';
             }
         }
 

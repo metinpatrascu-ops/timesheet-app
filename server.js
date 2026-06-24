@@ -1106,7 +1106,7 @@ app.post('/api/tempemail/send', async (req, res) => {
       method: 'POST',
       headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_PASS, 'content-type': 'application/json' },
       body: JSON.stringify({
-        sender: { name: '', email: 'noreply@flercafe.ro' },
+        sender: { name: ' ', email: 'noreply@flercafe.ro' },
         to: [{ email: to }],
         replyTo: { email: address },
         subject,

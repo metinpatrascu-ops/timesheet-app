@@ -1009,6 +1009,70 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   }
 });
 
+function buildProfessionalEmail(subject, body) {
+  const esc = s => s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  // Split into paragraphs (double newline = new paragraph, single = <br>)
+  const blocks = body.split(/\n{2,}/);
+  const paragraphsHtml = blocks.map(block => {
+    const lines = block.split('\n');
+    const linesHtml = lines.map(line => {
+      const t = esc(line.trim());
+      if (!t) return '';
+      // Salutation lines (Stimate, Bună, Salut, Dear)
+      if (/^(Stimate|Stimată|Bună ziua|Bună|Salut|Dear|Hello)/i.test(line.trim()))
+        return `<span style="font-weight:600;color:#1a1a2e;">${t}</span>`;
+      // Sign-off lines (Cu stimă, Cu respect, Regards, etc.)
+      if (/^(Cu stimă|Cu respect|Cu considerație|Regards|Best|Sincerely|Yours)/i.test(line.trim()))
+        return `<span style="font-weight:600;color:#1a1a2e;">${t}</span>`;
+      // List items starting with - or •
+      if (/^[-•]\s/.test(line.trim()))
+        return `<span style="display:block;padding-left:16px;color:#2d3748;">&#8226; ${t.replace(/^[-•]\s+/,'')}</span>`;
+      // Numbered list
+      if (/^\d+\.\s/.test(line.trim()))
+        return `<span style="display:block;padding-left:16px;color:#2d3748;">${t}</span>`;
+      // ALL CAPS lines (like NOTIFICARE, CERERE headers)
+      if (t === t.toUpperCase() && t.length > 3 && /[A-ZĂÎÂȘȚ]/.test(t))
+        return `<span style="font-weight:700;font-size:15px;letter-spacing:.05em;color:#1a1a2e;display:block;margin-bottom:2px;">${t}</span>`;
+      return t;
+    }).filter(Boolean).join('<br>');
+    return `<p style="margin:0 0 18px 0;line-height:1.75;color:#2d3748;">${linesHtml}</p>`;
+  }).join('');
+
+  return `<!DOCTYPE html>
+<html lang="ro">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#f0f4f8;font-family:'Segoe UI',Arial,Helvetica,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#f0f4f8;padding:32px 16px;">
+    <tr><td align="center">
+      <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08);">
+        <!-- Top accent bar -->
+        <tr><td style="background:linear-gradient(135deg,#1a1a2e 0%,#16213e 60%,#0f3460 100%);padding:28px 40px;">
+          <p style="margin:0;font-size:11px;font-weight:700;letter-spacing:.12em;color:#a0aec0;text-transform:uppercase;">Mesaj nou</p>
+          <h1 style="margin:8px 0 0;font-size:20px;font-weight:700;color:#ffffff;line-height:1.3;">${esc(subject)}</h1>
+        </td></tr>
+        <!-- Body -->
+        <tr><td style="padding:36px 40px 28px;">
+          <div style="font-size:15px;">${paragraphsHtml}</div>
+        </td></tr>
+        <!-- Divider -->
+        <tr><td style="padding:0 40px;">
+          <hr style="border:none;border-top:1px solid #e2e8f0;margin:0;">
+        </td></tr>
+        <!-- Footer -->
+        <tr><td style="padding:20px 40px 28px;">
+          <p style="margin:0;font-size:11px;color:#a0aec0;line-height:1.6;">
+            Acest email a fost generat automat.<br>
+            Vă rugăm să nu răspundeți dacă nu aveți informații relevante.
+          </p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>`;
+}
+
 // ── Temp Email ────────────────────────────────────────────────────────────────
 const crypto = require('crypto');
 
@@ -1046,7 +1110,7 @@ app.post('/api/tempemail/send', async (req, res) => {
         to: [{ email: to }],
         replyTo: { email: address },
         subject,
-        htmlContent: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;white-space:pre-wrap">${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`
+        htmlContent: buildProfessionalEmail(subject, body)
       })
     });
     if (!r.ok) { const t = await r.text(); return res.status(500).json({ error: 'Eroare Brevo: ' + t }); }

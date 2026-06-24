@@ -1046,7 +1046,7 @@ app.post('/api/tempemail/send', async (req, res) => {
         to: [{ email: to }],
         replyTo: { email: address },
         subject,
-        htmlContent: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;white-space:pre-wrap">${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div><hr style="margin-top:32px;border:none;border-top:1px solid #eee"><p style="color:#aaa;font-size:11px">Trimis prin TempMail • De la: ${address}</p>`
+        htmlContent: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;white-space:pre-wrap">${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div>`
       })
     });
     if (!r.ok) { const t = await r.text(); return res.status(500).json({ error: 'Eroare Brevo: ' + t }); }

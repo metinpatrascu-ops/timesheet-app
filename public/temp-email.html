@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TempMail – Email temporar</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .card { background: #1e293b; border-radius: 16px; padding: 36px 32px; width: 100%; max-width: 560px; box-shadow: 0 20px 60px rgba(0,0,0,.5); }
+  h1 { font-size: 1.6rem; font-weight: 700; color: #f8fafc; margin-bottom: 4px; }
+  .subtitle { color: #94a3b8; font-size: .9rem; margin-bottom: 28px; }
+  label { display: block; font-size: .82rem; font-weight: 600; color: #94a3b8; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  input, textarea { width: 100%; background: #0f172a; border: 1.5px solid #334155; border-radius: 8px; color: #f1f5f9; font-size: .95rem; padding: 10px 14px; outline: none; transition: border .2s; font-family: inherit; }
+  input:focus, textarea:focus { border-color: #6366f1; }
+  textarea { resize: vertical; min-height: 160px; font-size: .88rem; line-height: 1.6; }
+  .group { margin-bottom: 16px; }
+  .btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer; transition: opacity .2s, transform .1s; }
+  .btn:active { transform: scale(.98); }
+  .btn:disabled { opacity: .5; cursor: not-allowed; }
+  .btn-primary { background: #6366f1; color: #fff; }
+  .btn-primary:hover:not(:disabled) { background: #4f46e5; }
+  .btn-danger { background: #ef4444; color: #fff; margin-top: 10px; }
+  .btn-danger:hover:not(:disabled) { background: #dc2626; }
+  .badge { display: inline-flex; align-items: center; gap: 6px; background: #1e3a5f; color: #60a5fa; border-radius: 20px; padding: 4px 12px; font-size: .82rem; font-weight: 600; margin-bottom: 20px; }
+  .badge.warn { background: #422006; color: #fb923c; }
+  .badge.dead { background: #2d1b1b; color: #f87171; }
+  .alert { padding: 12px 14px; border-radius: 8px; font-size: .88rem; margin-bottom: 16px; }
+  .alert-ok { background: #052e16; color: #4ade80; border: 1px solid #166534; }
+  .alert-err { background: #2d1b1b; color: #f87171; border: 1px solid #7f1d1d; }
+  .step { display: none; }
+  .step.active { display: block; }
+  .addr-display { background: #0f172a; border-radius: 8px; padding: 10px 14px; font-size: 1rem; color: #818cf8; font-weight: 600; border: 1.5px solid #334155; word-break: break-all; margin-bottom: 20px; }
+  .divider { border: none; border-top: 1px solid #334155; margin: 20px 0; }
+  .sent-list { list-style: none; margin-top: 12px; }
+  .sent-list li { font-size: .82rem; color: #64748b; padding: 4px 0; border-bottom: 1px solid #1e293b; }
+  .sent-list li span { color: #94a3b8; }
+  .logo { font-size: 2rem; margin-bottom: 8px; }
+
+  /* Templates */
+  .tpl-label { font-size: .82rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 8px; }
+  .tpl-grid { display: flex; flex-wrap: wrap; gap: 7px; margin-bottom: 16px; }
+  .tpl-btn {
+    display: flex; align-items: center; gap: 6px;
+    background: #0f172a; border: 1.5px solid #334155;
+    color: #cbd5e1; border-radius: 8px; padding: 7px 12px;
+    font-size: .8rem; font-weight: 600; cursor: pointer;
+    transition: border-color .15s, color .15s, background .15s;
+    white-space: nowrap;
+  }
+  .tpl-btn:hover { border-color: #6366f1; color: #a5b4fc; background: #1e2a45; }
+  .tpl-btn.active { border-color: #6366f1; color: #a5b4fc; background: #1e274a; }
+  .tpl-btn .icon { font-size: 1rem; }
+
+  /* Preview modal */
+  .modal-bg { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 100; align-items: center; justify-content: center; padding: 16px; }
+  .modal-bg.open { display: flex; }
+  .modal { background: #1e293b; border-radius: 12px; padding: 24px; max-width: 500px; width: 100%; max-height: 80vh; overflow-y: auto; position: relative; }
+  .modal h3 { font-size: 1rem; color: #f1f5f9; margin-bottom: 12px; }
+  .modal pre { font-family: inherit; font-size: .83rem; color: #cbd5e1; white-space: pre-wrap; line-height: 1.65; background: #0f172a; border-radius: 8px; padding: 14px; border: 1px solid #334155; }
+  .modal-close { position: absolute; top: 14px; right: 16px; background: none; border: none; color: #94a3b8; font-size: 1.2rem; cursor: pointer; }
+  .modal-actions { display: flex; gap: 8px; margin-top: 14px; }
+  .modal-actions .btn { font-size: .88rem; padding: 9px; }
+  .btn-ghost { background: #334155; color: #e2e8f0; }
+  .btn-ghost:hover { background: #475569; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">📨</div>
+  <h1>TempMail</h1>
+  <p class="subtitle">Email temporar — trimite maxim 5 emailuri, apoi se șterge.</p>
+
+  <!-- Step 1: create -->
+  <div class="step active" id="step1">
+    <div id="msg1"></div>
+    <div class="group">
+      <label>Adresa ta de email temporară</label>
+      <input type="email" id="adresa" placeholder="ex: numelecutu@gmail.com" autocomplete="off">
+    </div>
+    <button class="btn btn-primary" onclick="createSession()">Creează sesiunea</button>
+  </div>
+
+  <!-- Step 2: compose & send -->
+  <div class="step" id="step2">
+    <div class="addr-display" id="addrDisplay"></div>
+    <div id="remainBadge"></div>
+    <div id="msg2"></div>
+
+    <!-- Template picker -->
+    <div class="tpl-label">Șablon</div>
+    <div class="tpl-grid" id="tplGrid"></div>
+
+    <div class="group">
+      <label>Către (destinatar)</label>
+      <input type="email" id="to" placeholder="destinatar@email.com">
+    </div>
+    <div class="group">
+      <label>Subiect</label>
+      <input type="text" id="subject" placeholder="Subiectul emailului">
+    </div>
+    <div class="group">
+      <label>Mesaj</label>
+      <textarea id="body" placeholder="Scrie mesajul tău aici..."></textarea>
+    </div>
+    <button class="btn btn-primary" id="sendBtn" onclick="sendEmail()">Trimite email</button>
+    <hr class="divider">
+    <ul class="sent-list" id="sentList"></ul>
+    <button class="btn btn-danger" onclick="deleteSession()">Șterge sesiunea acum</button>
+  </div>
+
+  <!-- Step 3: expired -->
+  <div class="step" id="step3">
+    <div class="alert alert-err">
+      <strong>Sesiunea a expirat.</strong><br>Ai trimis toate cele 5 emailuri sau ai șters manual sesiunea.
+    </div>
+    <button class="btn btn-primary" onclick="reset()">Creează o sesiune nouă</button>
+  </div>
+</div>
+
+<!-- Preview modal -->
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <button class="modal-close" onclick="closeModal()">✕</button>
+    <h3 id="modalTitle"></h3>
+    <pre id="modalBody"></pre>
+    <div class="modal-actions">
+      <button class="btn btn-primary" style="flex:1" onclick="applyTemplate()">Folosește șablonul</button>
+      <button class="btn btn-ghost" style="flex:0 0 auto;width:90px" onclick="closeModal()">Înapoi</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let session = null;
+let activeTemplate = null;
+let pendingTpl = null;
+const sentItems = [];
+
+// ── Templates ──────────────────────────────────────────────────────────────
+const TEMPLATES = [
+  {
+    id: 'profesional',
+    icon: '💼',
+    label: 'Profesional',
+    subject: 'Referitor la [subiect]',
+    body: `Stimată Doamnă / Stimate Domn,
+
+Vă contactez în legătură cu [descrie pe scurt motivul].
+
+[Explică situația sau solicitarea în detaliu. Fii clar și concis.]
+
+Vă rog să îmi confirmați primirea acestui mesaj și disponibilitatea de a discuta mai departe.
+
+Cu respect,
+[Numele tău]
+[Funcția / Compania]
+[Telefon]`
+  },
+  {
+    id: 'banca',
+    icon: '🏦',
+    label: 'Tip Bancă',
+    subject: 'Solicitare informații cont / servicii bancare',
+    body: `Stimate Departament Relații Clienți,
+
+Subsemnatul/a [Numele tău complet], titular/ă al/a contului nr. [XXXXXXXXXX], vă adresez prezenta solicitare în legătură cu [descrie problema sau întrebarea].
+
+Detalii suplimentare:
+- CNP / CIF: [completează dacă este necesar]
+- Produs bancar vizat: [ex: card de credit, credit imobiliar, cont curent]
+- Descrierea situației: [explică pe scurt]
+
+Vă rog să analizați solicitarea mea și să îmi comunicați răspunsul în cel mai scurt timp posibil, la adresa de retur a acestui mesaj.
+
+Vă mulțumesc pentru înțelegere.
+
+Cu stimă,
+[Numele tău]
+[Data]`
+  },
+  {
+    id: 'notificare',
+    icon: '📢',
+    label: 'Notificare',
+    subject: 'Notificare oficială – [subiect]',
+    body: `NOTIFICARE
+
+Destinatar: [Numele / Compania destinatarului]
+Data: [data de azi]
+Expeditor: [Numele tău / Compania ta]
+
+Prin prezenta vă notificăm că [descrie situația sau informația care trebuie comunicată oficial].
+
+Vă solicităm să luați act de cele de mai sus și să efectuați [acțiunea necesară, dacă există] până la data de [termen limită].
+
+Nerespectarea termenului poate atrage [consecința, dacă este cazul].
+
+Prezenta notificare are caracter oficial.
+
+[Semnătura]
+[Funcția]
+[Compania / Organizația]`
+  },
+  {
+    id: 'cerere',
+    icon: '📋',
+    label: 'Cerere formală',
+    subject: 'Cerere – [obiectul cererii]',
+    body: `CERERE
+
+Subsemnatul/a [Numele tău complet], domiciliat/ă în [localitate, județ], identificat/ă cu [CI/BI seria XX nr. XXXXXXX], vă adresez prezenta cerere prin care solicit [descrie clar ce soliciți].
+
+Motivele care stau la baza acestei solicitări sunt:
+1. [Motiv 1]
+2. [Motiv 2]
+
+În susținerea cererii mele, anexez următoarele documente:
+- [Document 1]
+- [Document 2]
+
+Vă rog să analizați favorabil solicitarea mea.
+
+Cu respect,
+[Numele tău]
+[Data]`
+  },
+  {
+    id: 'reclamatie',
+    icon: '⚠️',
+    label: 'Reclamație',
+    subject: 'Reclamație – [serviciu / produs]',
+    body: `Stimate/Stimată [Departament / Persoană de contact],
+
+Vă transmit prezenta reclamație cu privire la [descrie produsul sau serviciul în cauză], achizitionat/contractat la data de [dată], cu numărul de comandă / contract [număr].
+
+Problema întâmpinată:
+[Descrie clar și detaliat problema. Include date, ore, locații sau alte informații relevante.]
+
+Am încercat să rezolv această situație prin [ex: telefon, magazin, aplicație], fără rezultat.
+
+Prin prezenta, solicit:
+□ Remediere / înlocuire
+□ Rambursarea sumei de [valoare] lei
+□ Altele: [specifică]
+
+Aștept un răspuns în termen de 30 de zile calendaristice, conform legislației în vigoare.
+
+Cu stimă,
+[Numele tău]
+[Telefon / Email de contact]
+[Data]`
+  },
+  {
+    id: 'colaborare',
+    icon: '🤝',
+    label: 'Propunere colaborare',
+    subject: 'Propunere de colaborare – [domeniu]',
+    body: `Bună ziua,
+
+Mă numesc [Numele tău] și reprezint [Compania / proiectul tău].
+
+Vă contactez deoarece am identificat o oportunitate de colaborare reciproc avantajoasă în domeniul [domeniu / serviciu].
+
+Ce propunem:
+- [Beneficiu 1 pentru destinatar]
+- [Beneficiu 2]
+- [Condiții / termeni pe scurt]
+
+Suntem deschiși să discutăm detaliile și să personalizăm oferta în funcție de nevoile dumneavoastră.
+
+Aș aprecia posibilitatea unui apel telefonic sau a unei întâlniri în [interval orar preferat].
+
+Aștept răspunsul dumneavoastră cu interes.
+
+Cu respect,
+[Numele tău]
+[Funcția]
+[Website / LinkedIn]
+[Telefon]`
+  },
+  {
+    id: 'urmarire',
+    icon: '🔁',
+    label: 'Follow-up',
+    subject: 'Urmărire – [subiectul anterior]',
+    body: `Bună ziua,
+
+Revin cu un follow-up la emailul trimis pe data de [dată], privind [subiectul anterior].
+
+Întrucât nu am primit încă un răspuns, am dorit să verific dacă ați avut posibilitatea să analizați solicitarea mea referitoare la [subiect].
+
+[Dacă este cazul, adaugă orice informație nouă sau urgentă.]
+
+Vă stau la dispoziție pentru orice clarificări suplimentare.
+
+Vă mulțumesc pentru timpul acordat.
+
+Cu stimă,
+[Numele tău]`
+  },
+  {
+    id: 'prietenos',
+    icon: '😊',
+    label: 'Prietenos',
+    subject: '[Subiectul tău]',
+    body: `Salut [Prenume],
+
+Sper că ești bine!
+
+Îți scriu în legătură cu [motivul mesajului].
+
+[Scrie ce ai de spus, pe scurt și direct.]
+
+Aștept cu nerăbdare să aud de la tine!
+
+O zi bună,
+[Numele tău]`
+  }
+];
+
+// ── Build template grid ────────────────────────────────────────────────────
+function buildTemplateGrid() {
+  const grid = document.getElementById('tplGrid');
+  grid.innerHTML = '';
+
+  // "Gol" (no template) button
+  const blank = document.createElement('button');
+  blank.className = 'tpl-btn active';
+  blank.id = 'tpl-blank';
+  blank.innerHTML = '<span class="icon">✏️</span> Gol';
+  blank.onclick = () => {
+    clearActiveTemplate();
+    document.getElementById('subject').value = '';
+    document.getElementById('body').value = '';
+    setActiveBtn('tpl-blank');
+  };
+  grid.appendChild(blank);
+
+  TEMPLATES.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'tpl-btn';
+    btn.id = 'tpl-' + t.id;
+    btn.innerHTML = `<span class="icon">${t.icon}</span> ${t.label}`;
+    btn.onclick = () => previewTemplate(t);
+    grid.appendChild(btn);
+  });
+}
+
+function setActiveBtn(id) {
+  document.querySelectorAll('.tpl-btn').forEach(b => b.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+function clearActiveTemplate() {
+  activeTemplate = null;
+}
+
+// ── Modal ──────────────────────────────────────────────────────────────────
+function previewTemplate(tpl) {
+  pendingTpl = tpl;
+  document.getElementById('modalTitle').textContent = tpl.icon + '  ' + tpl.label;
+  document.getElementById('modalBody').textContent = tpl.body;
+  document.getElementById('modalBg').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('modalBg').classList.remove('open');
+  pendingTpl = null;
+}
+
+function applyTemplate() {
+  if (!pendingTpl) return;
+  activeTemplate = pendingTpl;
+  document.getElementById('subject').value = pendingTpl.subject;
+  document.getElementById('body').value = pendingTpl.body;
+  setActiveBtn('tpl-' + pendingTpl.id);
+  closeModal();
+}
+
+document.getElementById('modalBg').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalBg')) closeModal();
+});
+
+// ── Session ────────────────────────────────────────────────────────────────
+function showStep(n) {
+  document.querySelectorAll('.step').forEach(s => s.classList.remove('active'));
+  document.getElementById('step' + n).classList.add('active');
+}
+
+function setMsg(step, html, type) {
+  const el = document.getElementById('msg' + step);
+  el.innerHTML = html ? `<div class="alert alert-${type}">${html}</div>` : '';
+}
+
+function updateBadge(remaining) {
+  const el = document.getElementById('remainBadge');
+  const cls = remaining <= 1 ? 'dead' : remaining <= 2 ? 'warn' : '';
+  el.innerHTML = `<span class="badge ${cls}">📧 ${remaining} email${remaining !== 1 ? 'uri' : ''} rămase</span>`;
+}
+
+async function createSession() {
+  const address = document.getElementById('adresa').value.trim();
+  setMsg(1, '', '');
+  try {
+    const r = await fetch('/api/tempemail/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address })
+    });
+    const data = await r.json();
+    if (!r.ok) { setMsg(1, data.error, 'err'); return; }
+    session = { address: data.address, token: data.token };
+    document.getElementById('addrDisplay').textContent = data.address;
+    updateBadge(data.remaining);
+    buildTemplateGrid();
+    showStep(2);
+  } catch (e) {
+    setMsg(1, 'Eroare de rețea', 'err');
+  }
+}
+
+async function sendEmail() {
+  if (!session) return;
+  const to = document.getElementById('to').value.trim();
+  const subject = document.getElementById('subject').value.trim();
+  const body = document.getElementById('body').value.trim();
+  if (!to || !subject || !body) { setMsg(2, 'Completează toate câmpurile.', 'err'); return; }
+  setMsg(2, '', '');
+  const btn = document.getElementById('sendBtn');
+  btn.disabled = true; btn.textContent = 'Se trimite...';
+  try {
+    const r = await fetch('/api/tempemail/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: session.address, token: session.token, to, subject, body })
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      if (r.status === 410) { showStep(3); return; }
+      setMsg(2, data.error, 'err');
+      btn.disabled = false; btn.textContent = 'Trimite email';
+      return;
+    }
+    sentItems.unshift({ to, subject, time: new Date().toLocaleTimeString('ro-RO') });
+    renderSentList();
+    document.getElementById('to').value = '';
+    document.getElementById('subject').value = '';
+    document.getElementById('body').value = '';
+    setActiveBtn('tpl-blank');
+    clearActiveTemplate();
+    setMsg(2, `Email trimis cu succes către <strong>${to}</strong>!`, 'ok');
+    if (data.expired) { setTimeout(() => showStep(3), 2000); return; }
+    updateBadge(data.remaining);
+    btn.disabled = false; btn.textContent = 'Trimite email';
+  } catch (e) {
+    setMsg(2, 'Eroare de rețea', 'err');
+    btn.disabled = false; btn.textContent = 'Trimite email';
+  }
+}
+
+function renderSentList() {
+  const ul = document.getElementById('sentList');
+  ul.innerHTML = sentItems.map(i =>
+    `<li>✓ <span>${i.to}</span> — ${i.subject} <em style="color:#475569">(${i.time})</em></li>`
+  ).join('');
+}
+
+async function deleteSession() {
+  if (!session) return;
+  if (!confirm('Ești sigur că vrei să ștergi sesiunea?')) return;
+  await fetch('/api/tempemail/delete', {
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ address: session.address, token: session.token })
+  });
+  showStep(3);
+}
+
+function reset() {
+  session = null;
+  activeTemplate = null;
+  sentItems.length = 0;
+  document.getElementById('adresa').value = '';
+  document.getElementById('to').value = '';
+  document.getElementById('subject').value = '';
+  document.getElementById('body').value = '';
+  document.getElementById('sentList').innerHTML = '';
+  setMsg(1, '', '');
+  showStep(1);
+}
+</script>
+</body>
+</html>

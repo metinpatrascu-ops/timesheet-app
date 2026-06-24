@@ -121,10 +121,19 @@ const leaveSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 });
 
+const tempEmailSchema = new mongoose.Schema({
+  address: { type: String, unique: true, required: true },
+  token: { type: String, required: true },
+  sendCount: { type: Number, default: 0 },
+  active: { type: Boolean, default: true },
+  createdAt: { type: Date, default: Date.now, expires: 86400 }
+});
+
 const User = mongoose.model('User', userSchema);
 const Timesheet = mongoose.model('Timesheet', timesheetSchema);
 const Notification = mongoose.model('Notification', notificationSchema);
 const Leave = mongoose.model('Leave', leaveSchema);
+const TempEmail = mongoose.model('TempEmail', tempEmailSchema);
 
 // Helper function to generate JWT
 const generateToken = (userId) => {
@@ -998,6 +1007,71 @@ app.get('/api/test-email', verifyToken, async (req, res) => {
   } catch (err) {
     res.json({ ok: false, error: err.message });
   }
+});
+
+// ── Temp Email ────────────────────────────────────────────────────────────────
+const crypto = require('crypto');
+
+app.post('/api/tempemail/create', async (req, res) => {
+  const { address } = req.body;
+  if (!address || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address))
+    return res.status(400).json({ error: 'Adresă email invalidă' });
+  const existing = await TempEmail.findOne({ address });
+  if (existing && existing.active)
+    return res.status(409).json({ error: 'Această adresă e deja folosită' });
+  if (existing) await TempEmail.deleteOne({ _id: existing._id });
+  const token = crypto.randomBytes(24).toString('hex');
+  await TempEmail.create({ address, token });
+  res.json({ address, token, remaining: 5 });
+});
+
+app.post('/api/tempemail/send', async (req, res) => {
+  const { address, token, to, subject, body } = req.body;
+  if (!address || !token || !to || !subject || !body)
+    return res.status(400).json({ error: 'Câmpuri lipsă' });
+  const te = await TempEmail.findOne({ address, token });
+  if (!te) return res.status(403).json({ error: 'Sesiune invalidă' });
+  if (!te.active) return res.status(410).json({ error: 'Adresa a expirat' });
+  if (te.sendCount >= 5) {
+    te.active = false;
+    await te.save();
+    return res.status(410).json({ error: 'Limita de 5 emailuri atinsă' });
+  }
+  try {
+    const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'POST',
+      headers: { 'accept': 'application/json', 'api-key': process.env.BREVO_PASS, 'content-type': 'application/json' },
+      body: JSON.stringify({
+        sender: { name: address, email: 'metinpatrascu@gmail.com' },
+        to: [{ email: to }],
+        replyTo: { email: address },
+        subject,
+        htmlContent: `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:20px;white-space:pre-wrap">${body.replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>')}</div><hr style="margin-top:32px;border:none;border-top:1px solid #eee"><p style="color:#aaa;font-size:11px">Trimis prin TempMail • De la: ${address}</p>`
+      })
+    });
+    if (!r.ok) { const t = await r.text(); return res.status(500).json({ error: 'Eroare Brevo: ' + t }); }
+    te.sendCount += 1;
+    if (te.sendCount >= 5) te.active = false;
+    await te.save();
+    res.json({ sent: true, remaining: 5 - te.sendCount, expired: !te.active });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete('/api/tempemail/delete', async (req, res) => {
+  const { address, token } = req.body;
+  const te = await TempEmail.findOne({ address, token });
+  if (!te) return res.status(403).json({ error: 'Sesiune invalidă' });
+  await TempEmail.deleteOne({ _id: te._id });
+  res.json({ deleted: true });
+});
+
+app.get('/api/tempemail/status', async (req, res) => {
+  const { address, token } = req.query;
+  const te = await TempEmail.findOne({ address, token });
+  if (!te) return res.status(403).json({ error: 'Sesiune invalidă' });
+  res.json({ address: te.address, remaining: 5 - te.sendCount, active: te.active });
 });
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));

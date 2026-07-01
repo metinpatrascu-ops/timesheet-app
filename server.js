@@ -1138,41 +1138,6 @@ app.get('/api/tempemail/status', async (req, res) => {
   res.json({ address: te.address, remaining: 5 - te.sendCount, active: te.active });
 });
 
-app.post('/api/seed/july2026', async (req, res) => {
-  if (req.body.secret !== 'seed-iulie-2026') return res.status(403).json({ error: 'forbidden' });
-  try {
-    const georgiana = await User.findOne({ name: { $regex: /georgiana/i } });
-    const bob = await User.findOne({ name: { $regex: /bob/i } });
-    if (!georgiana || !bob) return res.status(404).json({ error: 'angajati negasiti', g: !!georgiana, b: !!bob });
-    const julyStart = new Date('2026-07-01T00:00:00Z');
-    const julyEnd = new Date('2026-08-01T00:00:00Z');
-    await Timesheet.deleteMany({ userId: { $in: [georgiana._id, bob._id] }, date: { $gte: julyStart, $lt: julyEnd } });
-    const roOffset = '+03:00';
-    const scheduleG = [], scheduleB = [];
-    for (let day = 1; day <= 31; day++) {
-      const block = Math.floor((day - 1) / 2);
-      const employee = block % 2 === 0 ? georgiana : bob;
-      const dateStr = `2026-07-${String(day).padStart(2, '0')}`;
-      const dateObj = new Date(dateStr + 'T00:00:00Z');
-      const checkInDate = new Date(`${dateStr}T09:00:00${roOffset}`);
-      const checkOutDate = new Date(`${dateStr}T19:00:00${roOffset}`);
-      await new Timesheet({ userId: employee._id, date: dateObj, checkIn: checkInDate, checkOut: checkOutDate, totalHours: 10, status: 'approved', breaks: [] }).save();
-      const label = `${String(day).padStart(2,'0')}.07.2026`;
-      if (employee._id.equals(georgiana._id)) scheduleG.push(label);
-      else scheduleB.push(label);
-    }
-    res.json({ ok: true, created: 31 });
-    // One summary email per employee
-    const makeRows = days => days.map(d => `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;">${d}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;">09:00</td><td style="padding:6px 12px;border-bottom:1px solid #eee;">19:00</td><td style="padding:6px 12px;border-bottom:1px solid #eee;color:#27ae60;">✅ Aprobat</td></tr>`).join('');
-    const tableStyle = 'width:100%;border-collapse:collapse;font-size:14px;';
-    const headStyle = 'background:#3498db;color:#fff;';
-    const makeTable = days => `<table style="${tableStyle}"><thead><tr style="${headStyle}"><th style="padding:8px 12px;text-align:left;">Data</th><th style="padding:8px 12px;text-align:left;">Check In</th><th style="padding:8px 12px;text-align:left;">Check Out</th><th style="padding:8px 12px;text-align:left;">Status</th></tr></thead><tbody>${makeRows(days)}</tbody></table>`;
-    sendNotifEmail(georgiana.email, georgiana.name, 'Programul tău — Iulie 2026',
-      `<p>Programul tău de lucru pentru luna <strong>iulie 2026</strong> a fost stabilit. Ai <strong>${scheduleG.length} zile</strong> programate:</p>${makeTable(scheduleG)}<p style="margin-top:12px;color:#666;font-size:13px;">Program: 09:00 – 19:00</p>`);
-    sendNotifEmail(bob.email, bob.name, 'Programul tău — Iulie 2026',
-      `<p>Programul tău de lucru pentru luna <strong>iulie 2026</strong> a fost stabilit. Ai <strong>${scheduleB.length} zile</strong> programate:</p>${makeTable(scheduleB)}<p style="margin-top:12px;color:#666;font-size:13px;">Program: 09:00 – 19:00</p>`);
-  } catch (err) { res.status(500).json({ error: err.message }); }
-});
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 

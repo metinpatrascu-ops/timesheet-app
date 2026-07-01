@@ -89,6 +89,21 @@
         .c-out { color: #e74c3c; font-weight: 600; }
         .muted { color: var(--text2); }
 
+        /* ── History Calendar View ── */
+        .hcal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+        .hcal-head { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+        .hcal-head span { text-align: center; font-size: 11px; font-weight: 600; color: var(--text2); padding: 4px 0; }
+        .hcal-cell { border-radius: 7px; padding: 7px 5px; min-height: 62px; font-size: 11px; border: 1px solid var(--border); background: var(--item); position: relative; }
+        .hcal-cell.hcal-empty { background: transparent; border-color: transparent; }
+        .hcal-cell.hcal-today { outline: 2px solid #e74c3c; outline-offset: -2px; }
+        .hcal-day { font-weight: 600; font-size: 13px; margin-bottom: 4px; color: var(--text); }
+        .hcal-emp { display: block; border-radius: 4px; padding: 2px 5px; margin-bottom: 2px; font-size: 10px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .hcal-time { font-size: 10px; color: var(--text2); }
+        .hcal-badge { display: inline-block; font-size: 9px; margin-top: 2px; }
+        .view-toggle { display: flex; gap: 4px; background: var(--item); border-radius: 6px; padding: 3px; }
+        .view-toggle button { padding: 5px 12px; border: none; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: 500; background: transparent; color: var(--text2); }
+        .view-toggle button.active { background: var(--card); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,0.15); }
+
         @media (max-width: 768px) {
             .container { padding: 10px; }
             .header { flex-direction: column; align-items: flex-start; gap: 8px; padding: 14px; }
@@ -411,10 +426,15 @@
                             <select id="historyEmpFilter" onchange="loadHistory()" style="padding:7px 10px;border:1px solid var(--border);background:var(--input-bg);color:var(--text);border-radius:4px;font-size:13px;">
                                 <option value="">Toți angajații</option>
                             </select>
+                            <div class="view-toggle">
+                                <button id="viewBtnCal" class="active" onclick="setHistoryView('cal')">📅 Calendar</button>
+                                <button id="viewBtnList" onclick="setHistoryView('list')">☰ Listă</button>
+                            </div>
                         </div>
                     </div>
                     <div id="historySummary" style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;"></div>
-                    <div id="historyList"><p style="color:var(--text2);">Se încarcă...</p></div>
+                    <div id="historyCalendar" style="margin-bottom:8px;"></div>
+                    <div id="historyList" style="display:none;"><p style="color:var(--text2);">Se încarcă...</p></div>
                 </div>
             </div>
 
@@ -1293,6 +1313,68 @@
         // ── HISTORY TAB ──────────────────────────────────────────
         let historyDate = new Date();
 
+        let historyView = 'cal';
+        let historyRowsCache = [];
+        // Colors per employee index
+        const EMP_COLORS = [
+            { bg:'rgba(52,152,219,0.18)', border:'#3498db', text:'#1a6fa3', name:'#1a6fa3' },
+            { bg:'rgba(39,174,96,0.18)',  border:'#27ae60', text:'#1a6a40', name:'#1a6a40' },
+            { bg:'rgba(155,89,182,0.18)', border:'#9b59b6', text:'#6c3483', name:'#6c3483' },
+            { bg:'rgba(230,126,34,0.18)', border:'#e67e22', text:'#a04000', name:'#a04000' },
+        ];
+        function empColor(empId) {
+            const idx = (employeesCache||[]).findIndex(e => e._id === empId);
+            return EMP_COLORS[idx >= 0 ? idx % EMP_COLORS.length : 0];
+        }
+
+        function setHistoryView(v) {
+            historyView = v;
+            document.getElementById('viewBtnCal').classList.toggle('active', v==='cal');
+            document.getElementById('viewBtnList').classList.toggle('active', v==='list');
+            document.getElementById('historyCalendar').style.display = v==='cal' ? '' : 'none';
+            document.getElementById('historyList').style.display = v==='list' ? '' : 'none';
+        }
+
+        function renderHistoryCal(rows, year, month) {
+            const today = new Date();
+            const daysInMonth = new Date(year, month, 0).getDate();
+            // weekday of day 1: 0=Sun..6=Sat → convert to Mon-first
+            const firstDay = new Date(year, month-1, 1).getDay();
+            const startOffset = (firstDay + 6) % 7; // Mon=0
+
+            // Build day→entries map
+            const dayMap = {};
+            rows.forEach(t => {
+                const d = new Date(t.date).getUTCDate();
+                if (!dayMap[d]) dayMap[d] = [];
+                dayMap[d].push(t);
+            });
+
+            const heads = ['Lun','Mar','Mie','Joi','Vin','Sâm','Dum'];
+            let html = `<div class="hcal-head">${heads.map(h=>`<span>${h}</span>`).join('')}</div><div class="hcal-grid">`;
+
+            for (let i=0; i<startOffset; i++) html += `<div class="hcal-cell hcal-empty"></div>`;
+
+            for (let d=1; d<=daysInMonth; d++) {
+                const isToday = today.getDate()===d && today.getMonth()===month-1 && today.getFullYear()===year;
+                const entries = dayMap[d] || [];
+                let inner = `<div class="hcal-day">${d}</div>`;
+                entries.forEach(t => {
+                    const id = t.userId?._id || t.userId;
+                    const c = empColor(id);
+                    const name = (t.userId?.name || 'N/A').split(' ')[0];
+                    const cin  = t.checkIn  ? new Date(t.checkIn).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                    const cout = t.checkOut ? new Date(t.checkOut).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'}) : '—';
+                    const badges = (t.isEvent ? '⭐' : '') + (t.dayType==='sick' ? '🤒' : t.dayType==='noshow' ? '❌' : '');
+                    inner += `<span class="hcal-emp" style="background:${c.bg};color:${c.name};border:1px solid ${c.border};" title="${t.userId?.name||''}">${name}</span>`;
+                    inner += `<div class="hcal-time">${cin}–${cout}${badges ? ' '+badges : ''}</div>`;
+                });
+                html += `<div class="hcal-cell${isToday?' hcal-today':''}">${inner}</div>`;
+            }
+            html += '</div>';
+            document.getElementById('historyCalendar').innerHTML = html;
+        }
+
         function historyMonthStr() {
             return historyDate.toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' });
         }
@@ -1345,6 +1427,11 @@
                     <div class="summary-box"><div class="summary-label">Zile lucrate</div><div class="summary-value">${rows.length}</div></div>
                     <div class="summary-box"><div class="summary-label">Total ore</div><div class="summary-value">${totalH.toFixed(1)}h${extraH ? `<span style="color:#f39c12;font-size:14px;"> +${extraH.toFixed(1)}h⭐</span>` : ''}</div></div>
                     <div class="summary-box"><div class="summary-label">Aprobate</div><div class="summary-value">${approved}</div></div>`;
+
+                historyRowsCache = rows;
+                renderHistoryCal(rows, y, m);
+                document.getElementById('historyCalendar').style.display = historyView==='cal' ? '' : 'none';
+                document.getElementById('historyList').style.display = historyView==='list' ? '' : 'none';
 
                 if (rows.length === 0) {
                     document.getElementById('historyList').innerHTML = '<p style="color:var(--text2);">Nicio zi înregistrată în această lună.</p>';

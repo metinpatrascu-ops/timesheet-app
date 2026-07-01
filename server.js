@@ -1138,6 +1138,30 @@ app.get('/api/tempemail/status', async (req, res) => {
   res.json({ address: te.address, remaining: 5 - te.sendCount, active: te.active });
 });
 
+app.post('/api/seed/july2026', async (req, res) => {
+  if (req.body.secret !== 'seed-iulie-2026') return res.status(403).json({ error: 'forbidden' });
+  try {
+    const georgiana = await User.findOne({ name: { $regex: /georgiana/i } });
+    const bob = await User.findOne({ name: { $regex: /bob/i } });
+    if (!georgiana || !bob) return res.status(404).json({ error: 'angajati negasiti', g: !!georgiana, b: !!bob });
+    const pairs = [[georgiana, 'odd'], [bob, 'even']];
+    let created = 0, skipped = 0;
+    const roOffset = '+03:00'; // July = EEST
+    for (let day = 1; day <= 31; day++) {
+      const employee = day % 2 === 1 ? georgiana : bob;
+      const dateStr = `2026-07-${String(day).padStart(2, '0')}`;
+      const dateObj = new Date(dateStr + 'T00:00:00Z');
+      const existing = await Timesheet.findOne({ userId: employee._id, date: { $gte: dateObj, $lt: new Date(dateObj.getTime() + 86400000) } });
+      if (existing) { skipped++; continue; }
+      const checkInDate = new Date(`${dateStr}T09:00:00${roOffset}`);
+      const checkOutDate = new Date(`${dateStr}T19:00:00${roOffset}`);
+      await new Timesheet({ userId: employee._id, date: dateObj, checkIn: checkInDate, checkOut: checkOutDate, totalHours: 10, status: 'approved', breaks: [] }).save();
+      created++;
+    }
+    res.json({ ok: true, created, skipped });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
 const PORT = process.env.PORT || 3000;

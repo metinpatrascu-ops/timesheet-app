@@ -1142,18 +1142,17 @@ app.get('/api/tempemail/status', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-// ONE-TIME MIGRATION — rename Georgiana → Metin, clear email
+// ONE-TIME MIGRATION — set correct name/email for Metin
 app.post('/api/admin/rename-georgiana-to-metin', async (req, res) => {
   const secret = req.headers['x-migration-secret'];
   if (secret !== 'metin2026') return res.status(403).json({ error: 'forbidden' });
-  const all = await User.find({ role: 'employee' }, 'name email');
-  const emp = await User.findOneAndUpdate(
-    { name: { $regex: /georgiana|costea/i } },
-    { $set: { name: 'Metin', email: 'metin.pontaj@noemail.local' } },
+  const emp = await User.findByIdAndUpdate(
+    '6a2a90bd657ebf3b57203e98',
+    { $set: { name: 'Metin', email: 'metinpatrascu32@gmail.com' } },
     { new: true }
   );
-  if (!emp) return res.status(404).json({ error: 'Nu am găsit angajatul', employees: all });
-  res.json({ ok: true, updated: { id: emp._id, name: emp.name } });
+  if (!emp) return res.status(404).json({ error: 'ID negăsit' });
+  res.json({ ok: true, name: emp.name, email: emp.email });
 });
 
 const PORT = process.env.PORT || 3000;

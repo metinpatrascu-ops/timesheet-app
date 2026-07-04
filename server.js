@@ -1142,18 +1142,6 @@ app.get('/api/tempemail/status', async (req, res) => {
 
 app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 
-// ONE-TIME MIGRATION — set correct name/email for Metin
-app.post('/api/admin/rename-georgiana-to-metin', async (req, res) => {
-  const secret = req.headers['x-migration-secret'];
-  if (secret !== 'metin2026') return res.status(403).json({ error: 'forbidden' });
-  const emp = await User.findByIdAndUpdate(
-    '6a2a90bd657ebf3b57203e98',
-    { $set: { name: 'Metin', email: 'metinpatrascu32@gmail.com' } },
-    { new: true }
-  );
-  if (!emp) return res.status(404).json({ error: 'ID negăsit' });
-  res.json({ ok: true, name: emp.name, email: emp.email });
-});
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {

@@ -1146,12 +1146,13 @@ app.get('/api/health', (req, res) => res.json({ status: 'ok' }));
 app.post('/api/admin/rename-georgiana-to-metin', async (req, res) => {
   const secret = req.headers['x-migration-secret'];
   if (secret !== 'metin2026') return res.status(403).json({ error: 'forbidden' });
+  const all = await User.find({ role: 'employee' }, 'name email');
   const emp = await User.findOneAndUpdate(
-    { name: { $regex: /georgiana/i } },
+    { name: { $regex: /georgiana|costea/i } },
     { $set: { name: 'Metin', email: 'metin.pontaj@noemail.local' } },
     { new: true }
   );
-  if (!emp) return res.status(404).json({ error: 'Angajatul nu a fost găsit' });
+  if (!emp) return res.status(404).json({ error: 'Nu am găsit angajatul', employees: all });
   res.json({ ok: true, updated: { id: emp._id, name: emp.name } });
 });
 
